@@ -19,7 +19,8 @@ Go、gin、html/template、HTMX、Pico.css、SQLite、gotd/td。单个二进制�
 
 ```
 cmd/server          入口
-cmd/tgcheck         诊断工具
+cmd/tgcheck         诊断工具：校验账号会话
+cmd/mktoken         调试工具：生成回复链接 token
 internal/config     配置
 internal/db         模型与数据库
 internal/tgclient   Telegram 连接、登录、监听、回复
