@@ -1,0 +1,35 @@
+{{define "content"}}
+<h3>用户管理</h3>
+<style>.users td,.users th{white-space:nowrap;vertical-align:middle}.users input{min-width:9em}</style>
+<table class="users r">
+<thead><tr><th>账号</th><th>角色</th><th>TG</th><th>创建时间</th><th>重置密码</th><th></th></tr></thead>
+<tbody>{{range .Users}}
+<tr>
+  <td data-label="账号">{{.Username}}</td>
+  <td data-label="角色">{{if .IsAdmin}}管理员{{else}}用户{{end}}</td>
+  <td data-label="TG">{{.Accounts}}</td>
+  <td data-label="创建">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+  <td data-label="重置密码">
+    <form method="post" action="{{url "/admin/users/"}}{{.ID}}/password" style="margin:0">
+      <fieldset role="group" style="margin:0">
+        <input name="password" type="password" placeholder="新密码" required minlength="6">
+        <button class="secondary" style="white-space:nowrap">重置</button>
+      </fieldset>
+    </form>
+  </td>
+  <td data-label="操作">{{if ne .ID $.User.ID}}<a href="#" hx-post="{{url "/admin/users/"}}{{.ID}}/delete" hx-confirm="删除用户 {{.Username}} 及其全部 TG 账号和消息？" hx-swap="none" hx-on::after-request="location.reload()">删除</a>{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+<p>{{if .Paged}}<a href="{{url "/admin/users"}}">第一页</a>{{end}} {{if .Next}}<a href="{{url "/admin/users"}}?after={{.Next}}">下一页 →</a>{{end}}</p>
+
+<h5>新建用户</h5>
+<form method="post" action="{{url "/admin/users"}}">
+  <div class="grid">
+    <input name="username" placeholder="账号（至少 3 位）" required minlength="3">
+    <input name="password" type="password" placeholder="密码（至少 6 位）" required minlength="6">
+    <label><input type="checkbox" name="admin"> 管理员</label>
+    <button>创建</button>
+  </div>
+</form>
+{{end}}

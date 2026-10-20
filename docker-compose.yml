@@ -1,0 +1,44 @@
+# docker compose up -d --build
+name: tg-channel
+services:
+  app:
+    build:
+      context: .
+      dockerfile: ${APP_DOCKERFILE:-deploy/Dockerfile} # 默认 Docker 内编译；小内存机器设为 deploy/Dockerfile.prebuilt
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ADDR: ":8080"
+      DATA_DIR: /data
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/data
+    depends_on: [ntfy, bark]
+
+  ntfy:
+    image: binwiederhier/ntfy:v2.32.0
+    restart: unless-stopped
+    command: serve
+    environment:
+      NTFY_BASE_URL: ${NTFY_BASE_URL}
+    ports:
+      - "127.0.0.1:8081:80"
+    volumes:
+      - ./deploy/ntfy/server.yml:/etc/ntfy/server.yml:ro
+      - ntfy-data:/var/lib/ntfy
+      - ntfy-cache:/var/cache/ntfy
+
+  bark:
+    image: finab/bark-server:v2.3.9
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8080"
+    volumes:
+      - bark-data:/data
+
+volumes:
+  ntfy-data:
+  ntfy-cache:
+  bark-data:

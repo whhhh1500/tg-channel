@@ -1,0 +1,38 @@
+{{define "content"}}
+<h3>{{.Account.FirstName}} <small>{{if .Account.Username}}@{{.Account.Username}}{{end}} · {{.Account.Status}}</small></h3>
+{{if .Account.LastError}}<p><small style="color:var(--pico-del-color)">{{.Account.LastError}}</small></p>{{end}}
+
+<article>
+<header style="display:flex;justify-content:space-between;align-items:center"><span><strong>ntfy</strong>（iOS / Android）</span>
+  {{if .Ntfy}}<label style="margin:0"><input type="checkbox" role="switch" {{if .Ntfy.Enabled}}checked{{end}} hx-post="{{url "/channels/"}}{{.Ntfy.ID}}/toggle" hx-swap="none"> 启用</label>{{end}}
+</header>
+<p>手机装 ntfy App，添加服务器后订阅下面的 topic，按这四项填：</p>
+<table style="font-size:.9em">
+  <tr><td>服务器地址</td><td><code>{{.NtfyURL}}</code></td></tr>
+  <tr><td>用户名</td><td><code>{{.User.Username}}</code></td></tr>
+  <tr><td>密码</td><td>你登录本站的密码</td></tr>
+  <tr><td>topic</td><td><code>{{if .Ntfy}}{{.Ntfy.Target}}{{end}}</code></td></tr>
+</table>
+<form method="post" action="{{url "/accounts/"}}{{.Account.ID}}/ntfy">
+  <fieldset role="group">
+    <input name="topic" value="{{if .Ntfy}}{{.Ntfy.Target}}{{end}}" placeholder="topic，只能用字母数字 - _" required pattern="[A-Za-z0-9_\-]{1,64}">
+    <button>保存 topic</button>
+  </fieldset>
+</form>
+</article>
+
+<article>
+<header style="display:flex;justify-content:space-between;align-items:center"><span><strong>Bark</strong>（仅 iOS）</span>
+  {{if .Bark}}<label style="margin:0"><input type="checkbox" role="switch" {{if .Bark.Enabled}}checked{{end}} hx-post="{{url "/channels/"}}{{.Bark.ID}}/toggle" hx-swap="none"> 启用</label>{{end}}
+</header>
+<p>手机装 Bark App → 右上角 + → 服务器地址填 <code>{{.BarkURL}}</code>，添加后把 App 里显示的 device key 填到这里：</p>
+<form method="post" action="{{url "/accounts/"}}{{.Account.ID}}/bark">
+  <fieldset role="group">
+    <input name="key" value="{{if .Bark}}{{.Bark.Target}}{{end}}" placeholder="device key，留空则关闭 Bark">
+    <button>保存</button>
+  </fieldset>
+</form>
+</article>
+
+<p><a href="{{url "/accounts"}}">返回</a></p>
+{{end}}

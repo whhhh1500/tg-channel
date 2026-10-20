@@ -1,0 +1,9 @@
+# 可选：使用本地 `sh deploy/build.sh` 编译好的 build/app，适合内存不足以编译的服务器。
+# 在 .env 里设置 APP_DOCKERFILE=deploy/Dockerfile.prebuilt 启用。
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates tzdata
+COPY build/app /app
+RUN chmod +x /app
+VOLUME /data
+EXPOSE 8080
+CMD ["/app"]

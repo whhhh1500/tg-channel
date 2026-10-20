@@ -1,0 +1,102 @@
+{{define "layout"}}<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TG 转发</title>
+<link rel="stylesheet" href="{{asset "/static/pico.min.css"}}">
+<script src="{{asset "/static/htmx.min.js"}}"></script>
+<style>
+:root{
+  --pico-font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Roboto,sans-serif;
+  --pico-font-size:93.75%;--pico-line-height:1.5;
+  --pico-spacing:.75rem;--pico-typography-spacing-vertical:.75rem;
+  --pico-form-element-spacing-vertical:.45rem;--pico-form-element-spacing-horizontal:.8rem;
+  --pico-border-radius:.45rem;
+  --pico-primary:#2f6fde;--pico-primary-hover:#1d4fb0;--pico-primary-underline:transparent;
+  --pico-primary-background:#2f6fde;--pico-primary-hover-background:#2558b8;--pico-primary-border:#2f6fde;--pico-primary-hover-border:#2558b8;
+  --pico-primary-focus:rgba(47,111,222,.25);
+  --pico-background-color:#f6f7f9;--pico-card-background-color:#fff;--pico-card-sectioning-background-color:#fafbfc;
+  --pico-muted-border-color:#e6e8ec;--pico-muted-color:#6b7280;
+  --accent:#0d7c8a;
+}
+body{background:var(--pico-background-color)}
+main.container{max-width:1040px;padding:0 1.25rem 2rem}
+/* 顶栏 */
+header.top{background:#fff;border-bottom:1px solid var(--pico-muted-border-color);margin-bottom:1.25rem}
+header.top nav{max-width:1040px;margin:0 auto;padding:.35rem var(--pico-spacing)}
+header.top nav ul{gap:0}header.top nav ul.links{margin-left:auto}
+header.top nav li{padding:.35rem .45rem}
+.brand{font-weight:700;color:#1f2937;letter-spacing:.2px;display:flex;align-items:center;gap:.45rem;white-space:nowrap}
+.brand i{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--pico-primary-background)}
+header.top nav a{color:#4b5563;font-weight:500;padding:.3rem .55rem;border-radius:.4rem}
+header.top nav a:hover{background:#f1f3f6;color:#111}
+header.top nav a.on{background:#e8effc;color:var(--pico-primary)}
+header.top nav form{margin:0}header.top nav form button{padding:.3rem .7rem;font-size:.85em;margin:0}
+/* 内容 */
+h3{font-size:1.2rem;margin-bottom:.9rem;color:#1f2937}h3 small{font-weight:400;color:var(--pico-muted-color);font-size:.8rem;margin-left:.4rem}
+h5{font-size:.95rem;margin:1rem 0 .5rem;color:#374151}
+article{box-shadow:0 1px 2px rgba(16,24,40,.05);border:1px solid var(--pico-muted-border-color);padding:1rem 1.1rem;margin-bottom:1rem}
+article header{padding:.6rem 1.1rem;margin:-1rem -1.1rem .9rem;background:var(--pico-card-sectioning-background-color);border-bottom:1px solid var(--pico-muted-border-color)}
+table{font-size:.9rem;margin-bottom:.75rem}
+th{color:var(--pico-muted-color);font-weight:600;font-size:.8rem;text-transform:none;border-bottom:1px solid #dfe3e8}
+td,th{padding:.5rem .6rem}
+tbody tr:nth-child(even){background:#fafbfc}tbody tr:hover{background:#f3f6fb}
+td{border-bottom:1px solid #eef0f3}
+code{font-size:.85em;background:#eef1f5;color:#1f2937;padding:.1em .4em}
+.flash{background:#eaf3ff;border:1px solid #cfe0fb;color:#1e40af;border-radius:.45rem;padding:.55rem .9rem;margin-bottom:1rem;font-size:.92rem}
+.nm{color:var(--accent);font-size:.85em;cursor:pointer;white-space:nowrap}.nm.copied{color:#2a9d3c}
+.clip{cursor:pointer}.clip .short{color:#555;white-space:nowrap}.clip.open .short{display:none}.clip.open .full{white-space:pre-wrap}
+button,[role=button]{font-weight:500}
+fieldset[role=group] button{white-space:nowrap}
+input,select,textarea{font-size:.95rem}
+small{color:var(--pico-muted-color)}
+@media (max-width: 768px) {
+  main.container{padding:0 12px}
+  /* 手机：第一行品牌 + 退出，第二行导航横向滚动 */
+  header.top nav{flex-wrap:wrap;padding:.3rem .6rem}
+  header.top nav ul.brandbar{order:0}header.top nav ul.user{order:1;margin-left:auto}
+  header.top nav ul.links{order:2;flex:0 0 100%;margin:0;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+  header.top nav ul.links::-webkit-scrollbar{display:none}
+  header.top nav li{padding:.25rem .25rem;white-space:nowrap}header.top nav a{padding:.25rem .5rem;font-size:.92em}
+  h3{font-size:1.1rem}
+  table.r thead{display:none}
+  table.r,table.r tbody,table.r tr{display:block;width:100%}
+  table.r tr{border-bottom:1px solid var(--pico-muted-border-color);padding:.5rem 0;background:none!important}
+  table.r td{display:flex;justify-content:flex-start;align-items:center;gap:.5rem;border:none;padding:.2rem 0;white-space:normal!important;max-width:none!important}
+  table.r td::before{content:attr(data-label);color:var(--pico-muted-color);flex:0 0 4.5em;font-size:.82em}
+  table.r td.c{display:block}table.r td.c::before{display:block;margin-bottom:.2rem}
+  .grid{grid-template-columns:1fr!important}
+  fieldset[role=group]{flex-wrap:wrap}fieldset[role=group] button{width:100%}
+}
+</style>
+<script>
+document.addEventListener('click', e => {
+  const n = e.target.closest('.nm');
+  if (n) { navigator.clipboard.writeText(n.dataset.copy); n.classList.add('copied'); setTimeout(() => n.classList.remove('copied'), 800); return; }
+  const c = e.target.closest('.clip');
+  if (c) { c.classList.toggle('open'); c.querySelector('.full').hidden = !c.classList.contains('open'); }
+});
+</script>
+</head>
+<body>
+<header class="top">
+<nav>
+  <ul class="brandbar"><li><a class="brand" href="{{url "/"}}"><i></i>TG 转发</a></li></ul>
+  {{if .User}}
+  <ul class="links">
+    <li><a href="{{url "/accounts"}}" {{if eq .Nav "accounts"}}class="on"{{end}}>我的 TG</a></li>
+    <li><a href="{{url "/peers"}}" {{if eq .Nav "peers"}}class="on"{{end}}>通知设置</a></li>
+    <li><a href="{{url "/messages"}}" {{if eq .Nav "messages"}}class="on"{{end}}>消息记录</a></li>
+    {{if .User.IsAdmin}}<li><a href="{{url "/admin/users"}}" {{if eq .Nav "admin/users"}}class="on"{{end}}>用户管理</a></li><li><a href="{{url "/admin/providers"}}" {{if eq .Nav "admin/providers"}}class="on"{{end}}>渠道管理</a></li>{{end}}
+  </ul>
+  <ul class="user"><li><form method="post" action="{{url "/logout"}}"><button class="secondary outline">退出 {{.User.Username}}</button></form></li></ul>
+  {{end}}
+</nav>
+</header>
+<main class="container">
+{{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+{{template "content" .}}
+</main>
+</body>
+</html>{{end}}

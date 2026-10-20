@@ -1,0 +1,10 @@
+{{define "content"}}
+<article style="max-width:480px;margin:auto;text-align:center">
+<h3>扫码登录 Telegram</h3>
+<p><small>手机 Telegram → 设置 → 设备 → 连接桌面设备，扫描下方二维码</small></p>
+<div hx-get="{{url "/accounts/new/"}}{{.Job.ID}}/status" hx-trigger="every 2s [!document.getElementById('pw')]" hx-swap="innerHTML">
+  {{template "qr_status" .}}
+</div>
+<p><a href="{{url "/accounts"}}">返回</a></p>
+</article>
+{{end}}

@@ -1,0 +1,44 @@
+{{define "content"}}
+<article id="box" style="max-width:520px;margin:auto">
+  <p id="loading" aria-busy="true">正在读取…</p>
+  <div id="main" hidden>
+    <p><small>对话</small><br><strong id="peer"></strong></p>
+    <p><small>发送者</small><br><span id="sender"></span> <span id="sid" class="nm"></span></p>
+    <p><small>内容</small><br><span id="text" style="white-space:pre-wrap"></span></p>
+    <form id="f">
+      <textarea id="t" rows="3" placeholder="输入回复…" required maxlength="4000"></textarea>
+      <button id="send">发送 (<span id="n">3</span>)</button>
+    </form>
+    <p id="msg"></p>
+    <p><small>链接 <span id="exp"></span> 过期，最多回复 3 次。</small> <a id="tg" hidden>打开 Telegram</a></p>
+  </div>
+  <p id="err" hidden style="color:var(--pico-del-color)"></p>
+</article>
+<script>
+(async () => {
+  const base = {{url ""}};
+  const token = location.hash.slice(1);
+  const $ = id => document.getElementById(id);
+  const fail = m => { $('loading').hidden = true; $('err').hidden = false; $('err').textContent = m; };
+  if (!token) return fail('链接不完整');
+  const post = (p, body) => fetch(base + p, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(async r => [r.ok, await r.json()]);
+  const [ok, info] = await post('/reply/open', {token});
+  if (!ok) return fail(info.error);
+  $('loading').hidden = true; $('main').hidden = false;
+  $('peer').textContent = info.peer; $('sender').textContent = info.sender;
+  if (info.sender_id) $('sid').textContent = info.sender_id;
+  $('text').textContent = info.text; $('exp').textContent = info.expires_at;
+  if (info.deep_link) { $('tg').hidden = false; $('tg').href = info.deep_link; }
+  const setN = n => { $('n').textContent = n; if (n <= 0) { $('send').disabled = true; $('t').disabled = true; } };
+  setN(info.remaining);
+  $('f').onsubmit = async e => {
+    e.preventDefault();
+    $('send').disabled = true; $('msg').textContent = '发送中…';
+    const [ok, r] = await post('/reply/send', {token, text: $('t').value});
+    if (!ok) { $('msg').textContent = r.error; $('send').disabled = $('n').textContent <= 0; return; }
+    $('t').value = ''; $('msg').textContent = '已发送';
+    setN(r.remaining); if (r.remaining > 0) $('send').disabled = false;
+  };
+})();
+</script>
+{{end}}

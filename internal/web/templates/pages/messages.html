@@ -1,0 +1,31 @@
+{{define "content"}}
+<h3>消息记录 <small>正文不落库，只保留元数据 {{.Retention}} 天</small></h3>
+<style>
+td.t{white-space:nowrap;font-variant-numeric:tabular-nums}
+td.n{white-space:nowrap}
+td.c{min-width:9em;max-width:420px}
+</style>
+{{if .Messages}}
+<div style="overflow-x:auto">
+<table class="r">
+<thead><tr><th>对话</th><th>发送者</th><th>内容</th><th>发送</th><th>到达</th><th>转发</th></tr></thead>
+<tbody>{{range .Messages}}
+<tr>
+  <td data-label="对话" class="n">{{name .PeerUser .Peer 0}}</td>
+  <td data-label="发送者" class="n">{{name .SenderUser .Sender .SenderID}}</td>
+  <td data-label="内容" class="c">{{clip .Text}}</td>
+  <td data-label="发送" class="t">{{tsec .SentAt}}</td>
+  <td data-label="到达" class="t">{{rel .ReceivedAt .SentAt}}</td>
+  <td data-label="转发" class="t">
+    {{if eq .PushState "sent"}}{{rel .PushAt .SentAt}}
+    {{else if eq .PushState "pending"}}<small>排队中</small>
+    {{else if eq .PushState "failed"}}<small style="color:var(--pico-del-color)" title="{{.PushError}}">失败</small>
+    {{else}}<small>无渠道</small>{{end}}
+  </td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+<p>{{if .Paged}}<a href="{{url "/messages"}}">最新</a>{{end}} {{if .Next}}<a href="{{url "/messages"}}?before={{.Next}}">更早 →</a>{{end}}</p>
+{{else}}<p>{{if .Paged}}没有更多了，<a href="{{url "/messages"}}">回最新</a>{{else}}还没有消息。{{end}}</p>{{end}}
+{{end}}

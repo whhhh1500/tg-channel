@@ -1,0 +1,11 @@
+{{define "content"}}
+<article style="max-width:400px;margin:2.5rem auto 0">
+<h3>登录</h3>
+<form method="post" action="{{url "/login"}}">
+  <input name="username" placeholder="账号" required autofocus>
+  <input name="password" type="password" placeholder="密码" required>
+  <button>登录</button>
+</form>
+<small>没有账号？<a href="{{url "/register"}}">注册</a></small>
+</article>
+{{end}}

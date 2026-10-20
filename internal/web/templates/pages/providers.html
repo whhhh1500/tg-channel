@@ -1,0 +1,16 @@
+{{define "content"}}
+<h3>渠道管理</h3>
+<table class="r">
+<thead><tr><th>类型</th><th>平台服务地址</th></tr></thead>
+<tbody>{{range .Providers}}
+<tr><td data-label="类型">{{.Kind}}</td><td data-label="地址">{{.BaseURL}}</td></tr>
+{{end}}</tbody>
+</table>
+<form method="post" action="{{url "/admin/providers"}}">
+  <div class="grid">
+    <select name="kind"><option value="ntfy">ntfy</option><option value="bark">bark</option></select>
+    <input name="base_url" placeholder="https://ntfy.example.com" required>
+    <button>保存</button>
+  </div>
+</form>
+{{end}}

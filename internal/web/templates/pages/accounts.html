@@ -1,0 +1,21 @@
+{{define "content"}}
+<h3>我的 TG</h3>
+<form method="post" action="{{url "/accounts/new"}}"><button>添加 TG（扫码）</button></form>
+{{if .Accounts}}
+<table class="r">
+<thead><tr><th>账号</th><th>状态</th><th>添加时间</th><th></th></tr></thead>
+<tbody>{{range .Accounts}}
+<tr>
+  <td data-label="账号">{{.FirstName}} {{if .Username}}<small>@{{.Username}}</small>{{end}}</td>
+  <td data-label="状态">{{.Status}}{{if .LastError}}<br><small>{{.LastError}}</small>{{end}}</td>
+  <td data-label="添加时间">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+  <td data-label="操作" style="white-space:nowrap">
+    <a href="{{url "/accounts/"}}{{.ID}}">渠道配置</a> ·
+    <a href="#" hx-post="{{url "/accounts/"}}{{.ID}}/sync" hx-swap="none" hx-on::after-request="location='{{url "/peers"}}'">刷新对话</a> ·
+    <a href="#" hx-post="{{url "/accounts/"}}{{.ID}}/delete" hx-confirm="删除后该账号停止监控，确定？" hx-swap="none" hx-on::after-request="location.reload()">删除</a>
+  </td>
+</tr>
+{{end}}</tbody>
+</table>
+{{else}}<p>还没有添加 TG 账号。</p>{{end}}
+{{end}}

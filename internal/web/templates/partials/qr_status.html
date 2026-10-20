@@ -1,0 +1,24 @@
+{{define "qr_status"}}
+{{if eq .Job.State "qr"}}
+  {{if .Job.QR}}
+  <img src="{{url "/accounts/new/"}}{{.Job.ID}}/qr.png?v={{.Job.QRVer}}" width="320" height="320" alt="二维码" style="max-width:100%">
+  <p><small>二维码会自动刷新，扫码后请稍候</small></p>
+  {{else}}<p aria-busy="true">正在连接 Telegram…</p>{{end}}
+{{else if eq .Job.State "password"}}
+  <p>该账号开启了两步验证，请输入密码</p>
+  <form id="pw" hx-post="{{url "/accounts/new/"}}{{.Job.ID}}/password" hx-target="closest div" hx-swap="innerHTML">
+    <input name="password" type="password" placeholder="两步验证密码" required autofocus>
+    {{if .Job.Msg}}<small style="color:var(--pico-del-color)">{{.Job.Msg}}</small>{{end}}
+    <button>提交</button>
+  </form>
+{{else if eq .Job.State "checking"}}
+  <p aria-busy="true">校验密码中…</p>
+{{else if eq .Job.State "syncing"}}
+  <p aria-busy="true">登录成功，正在同步对话…</p>
+{{else if eq .Job.State "error"}}
+  <p style="color:var(--pico-del-color)">{{.Job.Msg}}</p>
+  <form method="post" action="{{url "/accounts/new"}}"><button>重新添加</button></form>
+{{else}}
+  <p aria-busy="true">登录成功，正在同步对话…</p>
+{{end}}
+{{end}}

@@ -1,0 +1,15 @@
+# 对外地址由 .env 的 NTFY_BASE_URL 提供，不写在这里
+listen-http: ":80"
+cache-file: "/var/cache/ntfy/cache.db"
+# 消息在 ntfy 只缓存 4 小时（手机离线时靠它补收），默认 12 小时太长
+cache-duration: "4h"
+attachment-cache-dir: "/var/cache/ntfy/attachments"
+
+# 关闭匿名读写，平台用 admin 账号发消息、建用户
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"
+
+# iOS 推送唤醒必须配；只转发唤醒信号，不转发消息内容
+upstream-base-url: "https://ntfy.sh"
+
+behind-proxy: true
