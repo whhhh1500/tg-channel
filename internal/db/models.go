@@ -21,6 +21,7 @@ type TgAccount struct {
 	SessionEnc []byte // gotd session，MASTER_KEY 加密
 	Status     string `gorm:"size:16"` // online / offline / error
 	LastError  string
+	MonitorAll bool `gorm:"not null;default:false"` // 监听所有对话（永不监听的除外）
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
@@ -35,6 +36,7 @@ type TgPeer struct {
 	Username   string // @用户名，群可能没有
 	Title      string
 	Monitored  bool
+	Muted      bool `gorm:"not null;default:false"` // 永不监听，优先于 Monitored 和账号的 MonitorAll
 	UpdatedAt  time.Time
 }
 

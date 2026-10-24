@@ -1,17 +1,25 @@
 {{define "content"}}
 <h3>通知设置</h3>
-<p><small>打开开关后，该对话的新消息会转发到账号配置的渠道。列表不全时在"我的 TG"里点刷新对话。</small></p>
+<p><small>打开"监控转发"的对话，新消息会转发到账号配置的渠道。"永不监听"优先级最高，打开后该对话的消息一律忽略。新对话收到消息后自动出现在列表里。</small></p>
 <select onchange="location='{{url "/peers"}}'+(this.value?'?account='+this.value:'')" style="max-width:360px">
   <option value="">全部账号</option>
   {{range .Accounts}}<option value="{{.ID}}" {{if eq .ID $.Selected}}selected{{end}}>{{.TgUserID}} {{.FirstName}}</option>{{end}}
 </select>
+{{with .Current}}
+<form method="post" action="{{url "/accounts/"}}{{.ID}}/monitor-all" style="margin:.2rem 0 1.2rem">
+  <label style="margin:0"><input type="checkbox" role="switch" {{if .MonitorAll}}checked{{end}} onchange="this.form.submit()"> 监听所有人</label>
+  <small style="display:block;margin-top:.3rem">开启后所有对话都转发，不看"监控转发"开关；"永不监听"的仍然忽略。</small>
+</form>
+{{end}}
 {{if .Peers}}
 <table class="r">
-<thead><tr><th>对话</th><th>类型</th><th>监控转发</th></tr></thead>
+<thead><tr><th>对话</th><th>类型</th><th>监控转发</th><th>永不监听</th></tr></thead>
 <tbody>{{range .Peers}}
 <tr><td data-label="对话">{{name .Username .Title 0}}</td><td data-label="类型">{{.Kind}}</td>
-<td data-label="监控"><input type="checkbox" role="switch" {{if .Monitored}}checked{{end}}
-  hx-post="{{url "/peers/"}}{{.ID}}/toggle" hx-swap="none"></td></tr>
+<td data-label="监控"><input type="checkbox" role="switch" {{if .Monitored}}checked{{end}} {{if and $.Current $.Current.MonitorAll}}disabled title="已开启监听所有人"{{end}}
+  hx-post="{{url "/peers/"}}{{.ID}}/toggle" hx-swap="none"></td>
+<td data-label="永不监听"><input type="checkbox" role="switch" {{if .Muted}}checked{{end}}
+  hx-post="{{url "/peers/"}}{{.ID}}/mute" hx-swap="none"></td></tr>
 {{end}}</tbody>
 </table>
 <p>{{if .Paged}}<a href="{{url "/peers"}}{{if .Selected}}?account={{.Selected}}{{end}}">第一页</a>{{end}} {{if .Next}}<a href="{{url "/peers"}}?after={{.Next}}{{if .Selected}}&account={{.Selected}}{{end}}">下一页 →</a>{{end}}</p>

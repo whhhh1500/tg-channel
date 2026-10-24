@@ -26,6 +26,15 @@ func (s *Server) peersPage(c *gin.Context) {
 	q := s.db.Table("tg_peers").Select("tg_peers.*, tg_accounts.first_name AS account").
 		Joins("JOIN tg_accounts ON tg_accounts.id = tg_peers.account_id AND tg_accounts.user_id = ?", s.currentUser(c).ID)
 	selected, _ := strconv.Atoi(c.Query("account"))
+	if selected == 0 && len(accounts) == 1 { // 只有一个账号时直接选中，才能显示"监听所有人"
+		selected = int(accounts[0].ID)
+	}
+	var current *db.TgAccount
+	for i := range accounts {
+		if int(accounts[i].ID) == selected {
+			current = &accounts[i]
+		}
+	}
 	if selected > 0 {
 		q = q.Where("tg_peers.account_id = ?", selected)
 	}
@@ -41,17 +50,29 @@ func (s *Server) peersPage(c *gin.Context) {
 		last := peers[len(peers)-1]
 		next = fmt.Sprintf("%d-%d", last.AccountID, last.ID)
 	}
-	s.render(c, "peers.html", gin.H{"Peers": peers, "Next": next, "Paged": c.Query("after") != "", "Accounts": accounts, "Selected": uint(selected)})
+	s.render(c, "peers.html", gin.H{"Peers": peers, "Next": next, "Paged": c.Query("after") != "", "Accounts": accounts, "Selected": uint(selected), "Current": current})
 }
 
-func (s *Server) togglePeer(c *gin.Context) {
-	res := s.db.Exec(`UPDATE tg_peers SET monitored = NOT monitored WHERE id = ? AND account_id IN (SELECT id FROM tg_accounts WHERE user_id = ?)`,
-		c.Param("id"), s.currentUser(c).ID)
-	if res.RowsAffected == 0 {
-		c.String(http.StatusNotFound, "404")
+// togglePeer 切换对话的 monitored（监控转发）或 muted（永不监听），列名只来自路由，不来自请求。
+func (s *Server) togglePeer(col string) gin.HandlerFunc {
+	sql := `UPDATE tg_peers SET ` + col + ` = NOT ` + col + ` WHERE id = ? AND account_id IN (SELECT id FROM tg_accounts WHERE user_id = ?)`
+	return func(c *gin.Context) {
+		if s.db.Exec(sql, c.Param("id"), s.currentUser(c).ID).RowsAffected == 0 {
+			c.String(http.StatusNotFound, "404")
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
+// toggleMonitorAll 切换账号的"监听所有人"，回到该账号的通知设置页。
+func (s *Server) toggleMonitorAll(c *gin.Context) {
+	acc := s.ownedAccount(c, c.Param("id"))
+	if acc == nil {
 		return
 	}
-	c.Status(http.StatusNoContent)
+	s.db.Model(acc).Update("monitor_all", !acc.MonitorAll)
+	s.redirect(c, fmt.Sprintf("/peers?account=%d", acc.ID))
 }
 
 type messageRow struct {

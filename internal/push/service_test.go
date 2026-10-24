@@ -182,3 +182,33 @@ func TestSecureDeleteAndVacuum(t *testing.T) {
 	s := New(&config.Config{RetentionDays: 1}, g)
 	s.cleanupOnce() // 含 checkpoint 和 VACUUM，不应报错
 }
+
+// 监听优先级：永不监听 > 账号监听所有人 > 对话的监控转发开关。
+func TestMonitorRules(t *testing.T) {
+	g, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqlDB, _ := g.DB(); sqlDB.Close() })
+	acc := db.TgAccount{UserID: 1}
+	g.Create(&acc)
+	g.Create(&db.TgPeer{AccountID: acc.ID, Kind: "chat", PeerID: 1, Monitored: true})
+	g.Create(&db.TgPeer{AccountID: acc.ID, Kind: "chat", PeerID: 2})
+	g.Create(&db.TgPeer{AccountID: acc.ID, Kind: "chat", PeerID: 3, Monitored: true, Muted: true})
+	s := New(&config.Config{}, g)
+
+	saved := func(peer int64) bool {
+		var before, after int64
+		g.Model(&db.Message{}).Count(&before)
+		s.HandleMessage(tgclient.Incoming{AccountID: acc.ID, PeerKind: "chat", PeerID: peer, SentAt: time.Now()})
+		g.Model(&db.Message{}).Count(&after)
+		return after > before
+	}
+	if !saved(1) || saved(2) || saved(3) || saved(99) {
+		t.Fatal("关闭监听所有人：只转发打开监控且未永不监听的对话")
+	}
+	g.Model(&acc).Update("monitor_all", true)
+	if !saved(1) || !saved(2) || saved(3) {
+		t.Fatal("开启监听所有人：除永不监听外都转发")
+	}
+}

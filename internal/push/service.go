@@ -137,14 +137,19 @@ func (s *Service) GrantRead(userID uint, topic string) {
 	}
 }
 
-// HandleMessage 命中监控的对话才落库并排队推送。
+// HandleMessage 命中监控的对话才落库并排队推送：
+// 永不监听 > 账号监听所有人 > 对话的监控转发开关。
 func (s *Service) HandleMessage(in tgclient.Incoming) {
-	var peer db.TgPeer
-	if err := s.db.Where("account_id = ? AND kind = ? AND peer_id = ? AND monitored = ?", in.AccountID, in.PeerKind, in.PeerID, true).Limit(1).Find(&peer).Error; err != nil {
+	var peer struct {
+		ID                           uint
+		Monitored, Muted, MonitorAll bool
+	}
+	if err := s.db.Raw(`SELECT p.id, p.monitored, p.muted, a.monitor_all FROM tg_peers p JOIN tg_accounts a ON a.id = p.account_id
+		WHERE p.account_id = ? AND p.kind = ? AND p.peer_id = ? LIMIT 1`, in.AccountID, in.PeerKind, in.PeerID).Scan(&peer).Error; err != nil {
 		slog.Error("lookup peer", "account", in.AccountID, "err", err) // 查库失败不等于未监控
 		return
 	}
-	if peer.ID == 0 {
+	if peer.ID == 0 || peer.Muted || !(peer.Monitored || peer.MonitorAll) {
 		slog.Debug("message ignored: peer not monitored", "account", in.AccountID, "kind", in.PeerKind, "peer", in.PeerID)
 		return
 	}
