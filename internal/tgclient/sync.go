@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/gotd/td/telegram/query"
@@ -89,4 +90,57 @@ func syncPeers(ctx context.Context, g *gorm.DB, accountID uint, api *tg.Client) 
 		DoUpdates: clause.AssignmentColumns([]string{"access_hash", "title", "username", "updated_at"}),
 	}).CreateInBatches(peers, 200).Error
 	return len(peers), err
+}
+
+// ensurePeer 收到陌生对话的消息时补进 tg_peers（默认不监控），新会话不用手动同步就出现在列表里；
+// 已有的占位标题（如 "channel 123"）顺手补成真名。已知对话只多一次主键索引查询。
+func (m *Manager) ensurePeer(accountID uint, e tg.Entities, peer tg.PeerClass) {
+	p := db.TgPeer{AccountID: accountID}
+	switch v := peer.(type) {
+	case *tg.PeerUser:
+		p.Kind, p.PeerID = "user", v.UserID
+		if u := e.Users[v.UserID]; u != nil {
+			p.Title, p.Username = userName(u), u.Username
+			if !u.Min {
+				p.AccessHash = u.AccessHash
+			}
+		}
+	case *tg.PeerChat:
+		p.Kind, p.PeerID = "chat", v.ChatID
+		if c := e.Chats[v.ChatID]; c != nil {
+			p.Title = c.Title
+		}
+	case *tg.PeerChannel:
+		p.Kind, p.PeerID = "channel", v.ChannelID
+		if c := e.Channels[v.ChannelID]; c != nil {
+			p.Title, p.Username = c.Title, c.Username
+			if !c.Min {
+				p.AccessHash = c.AccessHash
+			}
+		}
+	default:
+		return
+	}
+	placeholder := fmt.Sprintf("%s %d", p.Kind, p.PeerID)
+	var old db.TgPeer
+	if err := m.db.Select("id", "title").Where("account_id = ? AND kind = ? AND peer_id = ?", accountID, p.Kind, p.PeerID).Limit(1).Find(&old).Error; err != nil {
+		slog.Warn("lookup peer", "account", accountID, "err", err)
+		return
+	}
+	if old.ID != 0 {
+		if old.Title == placeholder && p.Title != "" {
+			m.db.Model(&db.TgPeer{}).Where("id = ?", old.ID).Updates(map[string]any{"title": p.Title, "username": p.Username})
+		}
+		return
+	}
+	if p.Title == "" {
+		p.Title = placeholder
+	}
+	p.UpdatedAt = time.Now()
+	// 和同步并发时以先写入的为准
+	if err := m.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&p).Error; err != nil {
+		slog.Warn("add peer", "account", accountID, "err", err)
+		return
+	}
+	slog.Info("new peer", "account", accountID, "kind", p.Kind)
 }

@@ -116,3 +116,40 @@ func TestChannelAccessHash(t *testing.T) {
 		t.Fatalf("已有频道应只更新 hash: %+v", p2)
 	}
 }
+
+// 运行中收到陌生对话的消息：补进对话列表且默认不监控；占位标题后续补成真名；重复消息不重复插入。
+func TestEnsurePeer(t *testing.T) {
+	g, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqlDB, _ := g.DB(); sqlDB.Close() })
+	m := &Manager{db: g}
+
+	e := tg.Entities{Users: map[int64]*tg.User{7: {ID: 7, FirstName: "新", LastName: "朋友", Username: "nf", AccessHash: 99}}}
+	m.ensurePeer(1, e, &tg.PeerUser{UserID: 7})
+	m.ensurePeer(1, e, &tg.PeerUser{UserID: 7})
+	var ps []db.TgPeer
+	g.Where("account_id = 1").Find(&ps)
+	if len(ps) != 1 || ps[0].Title != "新 朋友" || ps[0].Username != "nf" || ps[0].AccessHash != 99 || ps[0].Monitored {
+		t.Fatalf("user peer: %+v", ps)
+	}
+
+	// 没有实体信息时先占位，下次带实体的消息补标题
+	m.ensurePeer(1, tg.Entities{}, &tg.PeerChat{ChatID: 5})
+	m.ensurePeer(1, tg.Entities{Chats: map[int64]*tg.Chat{5: {ID: 5, Title: "新群"}}}, &tg.PeerChat{ChatID: 5})
+	var c db.TgPeer
+	g.Where("account_id = 1 AND kind = 'chat' AND peer_id = 5").First(&c)
+	if c.Title != "新群" {
+		t.Fatalf("chat title = %q", c.Title)
+	}
+
+	// 已有真名的不被覆盖，监控开关保持
+	g.Model(&db.TgPeer{}).Where("id = ?", c.ID).Updates(map[string]any{"title": "改过的名", "monitored": true})
+	m.ensurePeer(1, tg.Entities{Chats: map[int64]*tg.Chat{5: {ID: 5, Title: "新群"}}}, &tg.PeerChat{ChatID: 5})
+	var c2 db.TgPeer
+	g.First(&c2, c.ID)
+	if c2.Title != "改过的名" || !c2.Monitored {
+		t.Fatalf("existing peer changed: %+v", c2)
+	}
+}

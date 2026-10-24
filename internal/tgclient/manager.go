@@ -258,8 +258,16 @@ func (m *Manager) listen(accountID uint, d tg.UpdateDispatcher) {
 }
 
 func (m *Manager) handle(accountID uint, e tg.Entities, raw tg.MessageClass) {
+	if svc, ok := raw.(*tg.MessageService); ok { // 被拉进群、建群等
+		m.ensurePeer(accountID, e, svc.PeerID)
+		return
+	}
 	msg, ok := raw.(*tg.Message)
-	if !ok || m.OnMessage == nil {
+	if !ok {
+		return
+	}
+	m.ensurePeer(accountID, e, msg.PeerID)
+	if m.OnMessage == nil {
 		return
 	}
 	slog.Debug("tg message", "account", accountID, "peer", fmt.Sprintf("%T", msg.PeerID), "id", msg.ID, "out", msg.Out, "len", len(msg.Message))
