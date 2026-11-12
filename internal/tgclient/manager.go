@@ -32,6 +32,8 @@ type Incoming struct {
 	SenderUser string
 	SenderID   int64
 	Text       string
+	Media      string // 媒体说明，如 "[图片 1280×960 12K]"
+	Preview    string // 可预览类型，空表示不能预览
 	SentAt     time.Time
 }
 
@@ -285,8 +287,8 @@ func (m *Manager) handle(accountID uint, e tg.Entities, raw tg.MessageClass) {
 	default:
 		return
 	}
-	if in.Text == "" && msg.Media != nil {
-		in.Text = "[媒体消息]"
+	if md := describe(msg.Media); md.Label != "" {
+		in.Media, in.Preview = md.Label, md.Preview
 	}
 	var from *tg.User
 	if f, ok := msg.FromID.(*tg.PeerUser); ok {

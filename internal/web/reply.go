@@ -135,6 +135,8 @@ type replyInfo struct {
 	Sender    string    `json:"sender"`
 	SenderID  int64     `json:"sender_id"`
 	Text      string    `json:"text"`
+	Media     string    `json:"media,omitempty"`
+	Preview   string    `json:"preview,omitempty"`
 	Remaining int       `json:"remaining"`
 	ExpiresAt string    `json:"expires_at"`
 	DeepLink  string    `json:"deep_link"`
@@ -166,7 +168,7 @@ func (s *Server) replyOpen(c *gin.Context) {
 	}
 	n, history := s.uses.get(reply.Key(in.Token))
 	c.JSON(http.StatusOK, replyInfo{
-		Peer: displayName("", p.PeerTitle), Sender: displayName(p.SenderUser, p.Sender), SenderID: p.SenderID, Text: p.Text,
+		Peer: displayName("", p.PeerTitle), Sender: displayName(p.SenderUser, p.Sender), SenderID: p.SenderID, Text: p.Text, Media: p.Media, Preview: p.Preview,
 		Remaining: reply.MaxUses - n,
 		ExpiresAt: time.Unix(p.Exp, 0).Local().Format("01-02 15:04"),
 		DeepLink:  reply.DeepLink(p.PeerKind, p.PeerID, p.MsgID),

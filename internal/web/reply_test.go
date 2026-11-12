@@ -77,6 +77,19 @@ func TestReplyEndpoints(t *testing.T) {
 	if code, m := post("/reply/send", map[string]any{"token": tok, "text": "ok", "quote": true}); code != 503 {
 		t.Fatalf("带引用发送（不在线）应 503: %d %v", code, m)
 	}
+	// 媒体预览：账号不在线时取不到，票据地址乱填应过期
+	if code, m := post("/reply/media", map[string]string{"token": tok}); code != 503 {
+		t.Fatalf("不在线预览应 503: %d %v", code, m)
+	}
+	if resp, _ := http.Get(srv.URL + "/tg/reply/file/0123456789abcdef0123456789abcdef"); resp.StatusCode != 410 {
+		t.Fatalf("无效票据应 410: %d", resp.StatusCode)
+	}
+	pm := p
+	pm.Media, pm.Preview, pm.Text = "[图片 1280×960 12K]", "image", "配文"
+	mtok, _ := reply.Sign("sec", pm)
+	if _, m := post("/reply/open", map[string]string{"token": mtok}); m["media"] != "[图片 1280×960 12K]" || m["preview"] != "image" || m["text"] != "配文" {
+		t.Fatalf("open 应带媒体说明: %v", m)
+	}
 	// 只能改这个链接发出的回复
 	if code, m := post("/reply/edit", map[string]any{"token": tok, "id": 123, "text": "改"}); code != 404 {
 		t.Fatalf("改不是本链接发出的消息应 404: %d %v", code, m)

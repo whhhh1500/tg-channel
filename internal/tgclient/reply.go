@@ -13,16 +13,9 @@ const replyInterval = 5 * time.Second // 每账号发送 / 修改间隔，防风
 
 // target 取账号的在线连接和对话的 InputPeer，并按每账号间隔限流。
 func (m *Manager) target(ctx context.Context, accountID uint, kind string, peerID, accessHash int64) (*tg.Client, tg.InputPeerClass, error) {
-	r := m.get(accountID)
-	if r == nil {
-		return nil, nil, errors.New("账号不在线")
-	}
-	select {
-	case <-r.ready:
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
-	case <-time.After(5 * time.Second):
-		return nil, nil, errors.New("账号连接中，稍后再试")
+	api, err := m.online(ctx, accountID)
+	if err != nil {
+		return nil, nil, err
 	}
 	var peer tg.InputPeerClass
 	switch kind {
@@ -42,7 +35,7 @@ func (m *Manager) target(ctx context.Context, accountID uint, kind string, peerI
 		return nil, nil, errors.New("发太快了，隔几秒再试")
 	}
 	m.lastReply[accountID] = time.Now()
-	return r.client.API(), peer, nil
+	return api, peer, nil
 }
 
 // Reply 用账号的常驻连接在对话里发一条消息，返回新消息 id。只在已收到消息的对话里回，不主动发起会话。

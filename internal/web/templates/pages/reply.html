@@ -4,13 +4,21 @@
 #hist li .t{white-space:pre-wrap}
 #hist li button{width:auto;padding:.15rem .6rem;font-size:.8rem;margin:0 0 0 .4rem}
 #hist li textarea{margin:.4rem 0}
+#mbox img,#mbox video{display:block;max-width:100%;max-height:70vh;margin:.4rem 0;border-radius:4px}
+#mbox audio{width:100%;margin:.4rem 0}
+#mbox iframe{width:100%;height:70vh;border:1px solid var(--pico-muted-border-color);margin:.4rem 0}
+#mbox pre{white-space:pre-wrap;max-height:60vh;overflow:auto;font-size:.85rem;padding:.6rem}
 </style>
 <article id="box" style="max-width:520px;margin:auto">
   <p id="loading" aria-busy="true">正在读取…</p>
   <div id="main" hidden>
     <p><small>对话</small><br><strong id="peer"></strong></p>
     <p><small>发送者</small><br><span id="sender"></span> <span id="sid" class="nm"></span></p>
-    <p><small>内容</small><br><span id="text" style="white-space:pre-wrap"></span></p>
+    <div style="margin-bottom:var(--pico-spacing)"><small>内容</small>
+      <div id="media" hidden><span id="ml"></span> <a href="#" id="pv" hidden>预览</a> <small id="pmsg"></small></div>
+      <div id="mbox" hidden></div>
+      <div id="text" style="white-space:pre-wrap"></div>
+    </div>
     <form id="f">
       <textarea id="t" rows="3" placeholder="输入回复…" required maxlength="4000"></textarea>
       <label><input type="checkbox" role="switch" id="quote"> 引用原消息</label>
@@ -38,6 +46,32 @@
   if (info.sender_id) $('sid').textContent = info.sender_id;
   $('text').textContent = info.text; $('exp').textContent = info.expires_at;
   if (info.deep_link) { $('tg').hidden = false; $('tg').href = info.deep_link; }
+
+  // 媒体：先只显示说明，点"预览"才去拉文件；拉过一次之后只切换显示 / 收起
+  if (info.media) { $('media').hidden = false; $('ml').textContent = info.media; $('pv').hidden = !info.preview; }
+  let loaded = false;
+  $('pv').onclick = async e => {
+    e.preventDefault();
+    const box = $('mbox');
+    if (loaded) { box.hidden = !box.hidden; $('pv').textContent = box.hidden ? '预览' : '收起'; return; }
+    $('pmsg').textContent = '加载中…';
+    const [ok, r] = await post('/reply/media', {token});
+    if (!ok) { $('pmsg').textContent = r.error; return; }
+    let m;
+    if (r.type === 'image') { m = el('img'); m.alt = r.name || ''; }
+    else if (r.type === 'video') { m = el('video'); m.controls = true; m.playsInline = true; m.preload = 'metadata'; }
+    else if (r.type === 'audio') { m = el('audio'); m.controls = true; }
+    else if (r.type === 'pdf') { m = el('iframe'); m.title = r.name || 'pdf'; }
+    if (m) { m.src = r.url; box.append(m); }
+    if (r.type === 'pdf') { const a = el('a', '', '新窗口打开'); a.href = r.url; a.target = '_blank'; box.append(a); }
+    if (r.type === 'md') {
+      const t = await fetch(r.url).then(x => x.ok ? x.text() : Promise.reject(x.statusText)).catch(() => null);
+      if (t == null) { $('pmsg').textContent = '加载失败'; return; }
+      box.append(el('pre', '', t));
+    }
+    if (m) m.onerror = () => { $('pmsg').textContent = '加载失败'; };
+    loaded = true; box.hidden = false; $('pv').textContent = '收起'; $('pmsg').textContent = '';
+  };
 
   // 回复历史：最新的在上面，每条可以改
   const addHist = m => {

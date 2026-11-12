@@ -29,6 +29,9 @@ const (
 	pushBodyBytes = 3600 // ntfy 单条 4096 字节上限，留余量
 )
 
+// body 一条消息在内存里的内容：正文、媒体说明、可预览类型。
+type body struct{ text, media, preview string }
+
 type Service struct {
 	cfg  *config.Config
 	db   *gorm.DB
@@ -37,7 +40,7 @@ type Service struct {
 
 	// 正文只在内存里排队，按 push_log id 存，推完即删；库里永远不落正文。
 	tmu   sync.Mutex
-	texts map[uint]string
+	texts map[uint]body
 
 	// 固定 worker 池；inflight 记录已派发未完成的任务，drain 不会重复派发
 	jobs     chan db.PushLog
@@ -46,7 +49,7 @@ type Service struct {
 }
 
 func New(cfg *config.Config, g *gorm.DB) *Service {
-	s := &Service{cfg: cfg, db: g, wake: make(chan struct{}, 1), texts: map[uint]string{}, jobs: make(chan db.PushLog, workers*2), inflight: map[uint]bool{}}
+	s := &Service{cfg: cfg, db: g, wake: make(chan struct{}, 1), texts: map[uint]body{}, jobs: make(chan db.PushLog, workers*2), inflight: map[uint]bool{}}
 	if cfg.NtfyUser != "" {
 		s.ntfy = newNtfy(cfg.NtfyURL, cfg.NtfyUser, cfg.NtfyPassword)
 	}
@@ -176,7 +179,7 @@ func (s *Service) HandleMessage(in tgclient.Incoming) {
 			// 提交前就把正文放进内存，worker 看到 pending 时一定能取到
 			s.tmu.Lock()
 			for _, l := range logs {
-				s.texts[l.ID] = in.Text
+				s.texts[l.ID] = body{in.Text, in.Media, in.Preview}
 			}
 			s.tmu.Unlock()
 			return nil
@@ -309,13 +312,13 @@ func (s *Service) deliver(ctx context.Context, l db.PushLog) bool {
 	s.db.First(&peer, msg.PeerID)
 
 	s.tmu.Lock()
-	text, ok := s.texts[l.ID]
+	b, ok := s.texts[l.ID]
 	s.tmu.Unlock()
 	if !ok { // 正文只在内存，进程重启过就没了
 		return s.setLog(&l, map[string]any{"status": "failed", "error": "进程重启，正文已丢弃"}) == nil
 	}
 	title := peer.Title
-	body := text
+	body := strings.TrimSpace(b.media + " " + b.text)
 	if msg.Sender != "" && msg.Sender != peer.Title {
 		body = msg.Sender + ": " + body
 	}
@@ -327,7 +330,7 @@ func (s *Service) deliver(ctx context.Context, l db.PushLog) bool {
 	case "bark":
 		err = bark.NewWithServers(ch.Target, s.serverFor(ch)).Send(ctx, title, fitBytes(body, pushBodyBytes))
 	case "ntfy":
-		err = s.ntfyOrAnon().publish(ctx, s.serverFor(ch), ch.Target, title, fitBytes(body, pushBodyBytes), "", s.replyActions(msg, peer, text))
+		err = s.ntfyOrAnon().publish(ctx, s.serverFor(ch), ch.Target, title, fitBytes(body, pushBodyBytes), "", s.replyActions(msg, peer, b))
 	default:
 		err = fmt.Errorf("未知渠道类型 %s", ch.Kind)
 	}
@@ -413,14 +416,14 @@ func (s *Service) ntfyOrAnon() *ntfyClient {
 
 // replyActions 通知按钮：配置了 PUBLIC_URL 才有"回复"，有深链才有"打开 Telegram"。
 // 点通知本身只展开，不跳转（用户要求）。
-func (s *Service) replyActions(msg db.Message, peer db.TgPeer, text string) []action {
+func (s *Service) replyActions(msg db.Message, peer db.TgPeer, b body) []action {
 	link := reply.DeepLink(peer.Kind, peer.PeerID, msg.TgMsgID)
 	var actions []action
 	if s.cfg.PublicURL != "" {
 		tok, err := reply.Sign(s.cfg.SessionSecret, reply.Payload{
 			Account: msg.AccountID, PeerKind: peer.Kind, PeerID: peer.PeerID, AccessHash: peer.AccessHash, MsgID: msg.TgMsgID,
 			Exp: time.Now().Add(reply.TTL).Unix(), PeerTitle: peer.Title,
-			Sender: msg.Sender, SenderUser: msg.SenderUser, SenderID: msg.SenderID, Text: text,
+			Sender: msg.Sender, SenderUser: msg.SenderUser, SenderID: msg.SenderID, Text: b.text, Media: b.media, Preview: b.preview,
 		})
 		if err == nil {
 			actions = append(actions, action{Action: "view", Label: "回复", URL: strings.TrimRight(s.cfg.PublicURL, "/") + "/reply#" + tok})

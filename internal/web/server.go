@@ -39,11 +39,12 @@ type Server struct {
 	base    string     // BASE_PATH，如 /tg；空表示根
 	uses    *uses      // 回复链接已用次数
 	limit   *limiter   // 登录 / 注册限速
+	files   *tickets   // 媒体预览票据
 	topicMu sync.Mutex // topic 切换和 ntfy 授权回收 / 授予整体串行，避免乱序留下旧授权
 }
 
 func New(cfg *config.Config, g *gorm.DB, tg *tgclient.Manager, p *push.Service) *gin.Engine {
-	s := &Server{cfg: cfg, db: g, tg: tg, push: p, base: strings.TrimRight(cfg.BasePath, "/"), uses: newUses(), limit: newLimiter()}
+	s := &Server{cfg: cfg, db: g, tg: tg, push: p, base: strings.TrimRight(cfg.BasePath, "/"), uses: newUses(), limit: newLimiter(), files: newTickets()}
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	_ = r.SetTrustedProxies(cfg.TrustedProxies) // 不信任任意来源的 X-Forwarded-For
@@ -68,6 +69,9 @@ func New(cfg *config.Config, g *gorm.DB, tg *tgclient.Manager, p *push.Service) 
 	root.POST("/reply/open", limit, s.replyOpen)
 	root.POST("/reply/send", limit, s.replySend)
 	root.POST("/reply/edit", limit, s.replyEdit)
+	root.POST("/reply/media", limit, s.replyMedia)
+	root.GET("/reply/file/:id", s.replyFile)
+	root.HEAD("/reply/file/:id", s.replyFile)
 
 	auth := root.Group("/", s.requireLogin)
 	auth.GET("/", func(c *gin.Context) { s.redirect(c, "/accounts") })

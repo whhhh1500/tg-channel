@@ -27,6 +27,8 @@ func main() {
 	flag.StringVar(&p.SenderUser, "sender-user", "", "发送者 @用户名")
 	flag.Int64Var(&p.SenderID, "sender-id", 0, "发送者 Telegram id")
 	flag.StringVar(&p.Text, "text", "", "消息正文")
+	flag.StringVar(&p.Media, "media", "", "媒体说明，如 \"[图片 1280×960 12K]\"")
+	flag.StringVar(&p.Preview, "preview", "", "可预览类型 image / video / audio / pdf / md")
 	ttl := flag.Duration("ttl", reply.TTL, "有效期")
 	flag.Parse()
 

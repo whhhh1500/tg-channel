@@ -13,6 +13,7 @@ import (
 
 	"tgchannel/internal/config"
 	"tgchannel/internal/db"
+	"tgchannel/internal/reply"
 	"tgchannel/internal/tgclient"
 )
 
@@ -210,5 +211,49 @@ func TestMonitorRules(t *testing.T) {
 	g.Model(&acc).Update("monitor_all", true)
 	if !saved(1) || !saved(2) || saved(3) {
 		t.Fatal("开启监听所有人：除永不监听外都转发")
+	}
+}
+
+// 媒体消息：通知正文带媒体说明，回复链接带说明和可预览类型，正文单独存。
+func TestMediaPush(t *testing.T) {
+	var got struct {
+		Message string
+		Actions []struct{ Label, URL string }
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+	}))
+	defer srv.Close()
+	g, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { sqlDB, _ := g.DB(); sqlDB.Close() })
+	g.Create(&db.Provider{Kind: "ntfy", BaseURL: srv.URL})
+	acc := db.TgAccount{UserID: 1}
+	g.Create(&acc)
+	g.Create(&db.TgPeer{AccountID: acc.ID, Kind: "user", PeerID: 7, Title: "Bob", Monitored: true})
+	g.Create(&db.Channel{AccountID: acc.ID, Kind: "ntfy", Target: "t", Enabled: true})
+	s := New(&config.Config{NtfyURL: srv.URL, PublicURL: "https://x/tg", SessionSecret: "sec"}, g)
+
+	s.HandleMessage(tgclient.Incoming{AccountID: acc.ID, PeerKind: "user", PeerID: 7, Sender: "Bob", Text: "配文", Media: "[图片 1280×960 12K]", Preview: "image", SentAt: time.Now()})
+	s.drainSync(context.Background())
+	if got.Message != "[图片 1280×960 12K] 配文" {
+		t.Fatalf("通知正文 = %q", got.Message)
+	}
+	if len(got.Actions) == 0 || got.Actions[0].Label != "回复" {
+		t.Fatalf("actions = %+v", got.Actions)
+	}
+	_, tok, _ := strings.Cut(got.Actions[0].URL, "#")
+	p, err := reply.Parse("sec", tok)
+	if err != nil || p.Media != "[图片 1280×960 12K]" || p.Preview != "image" || p.Text != "配文" {
+		t.Fatalf("token = %+v %v", p, err)
+	}
+
+	// 只有媒体没有配文
+	s.HandleMessage(tgclient.Incoming{AccountID: acc.ID, PeerKind: "user", PeerID: 7, Sender: "Bob", Media: "[语音 0:12 24K]", Preview: "audio", SentAt: time.Now()})
+	s.drainSync(context.Background())
+	if got.Message != "[语音 0:12 24K]" {
+		t.Fatalf("纯媒体通知正文 = %q", got.Message)
 	}
 }

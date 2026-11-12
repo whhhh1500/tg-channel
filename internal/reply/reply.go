@@ -40,6 +40,8 @@ type Payload struct {
 	SenderUser string `json:"u,omitempty"`
 	SenderID   int64  `json:"i,omitempty"`
 	Text       string `json:"t"`
+	Media      string `json:"l,omitempty"` // 媒体说明，如 "[图片 1280×960 12K]"
+	Preview    string `json:"v,omitempty"` // 可预览类型，空表示不能预览
 }
 
 var enc = base64.RawURLEncoding
