@@ -153,3 +153,21 @@ func TestEnsurePeer(t *testing.T) {
 		t.Fatalf("existing peer changed: %+v", c2)
 	}
 }
+
+// 发送结果里取新消息 id：私聊是短更新，超级群 / 频道在 UpdateMessageID 里。
+func TestSentID(t *testing.T) {
+	if id := sentID(&tg.UpdateShortSentMessage{ID: 11}); id != 11 {
+		t.Fatalf("short = %d", id)
+	}
+	upd := &tg.Updates{Updates: []tg.UpdateClass{
+		&tg.UpdateReadChannelInbox{},
+		&tg.UpdateMessageID{ID: 22, RandomID: 1},
+		&tg.UpdateNewChannelMessage{Message: &tg.Message{ID: 22}},
+	}}
+	if id := sentID(upd); id != 22 {
+		t.Fatalf("updates = %d", id)
+	}
+	if id := sentID(&tg.UpdatesTooLong{}); id != 0 {
+		t.Fatalf("unknown = %d", id)
+	}
+}

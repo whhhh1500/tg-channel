@@ -70,8 +70,19 @@ func TestReplyEndpoints(t *testing.T) {
 		t.Fatalf("不在线应 503: %d %v", code, m)
 	}
 	_, m = post("/reply/open", map[string]string{"token": tok})
-	if m["remaining"].(float64) != 3 {
-		t.Fatalf("失败不应计次: %v", m)
+	if m["remaining"].(float64) != 3 || len(m["history"].([]any)) != 0 {
+		t.Fatalf("失败不应计次也不进历史: %v", m)
+	}
+	// 引用开关是可选参数
+	if code, m := post("/reply/send", map[string]any{"token": tok, "text": "ok", "quote": true}); code != 503 {
+		t.Fatalf("带引用发送（不在线）应 503: %d %v", code, m)
+	}
+	// 只能改这个链接发出的回复
+	if code, m := post("/reply/edit", map[string]any{"token": tok, "id": 123, "text": "改"}); code != 404 {
+		t.Fatalf("改不是本链接发出的消息应 404: %d %v", code, m)
+	}
+	if code, m := post("/reply/edit", map[string]any{"token": tok, "id": 123, "text": " "}); code != 400 {
+		t.Fatalf("改成空内容应 400: %d %v", code, m)
 	}
 
 	// 次数预留 / 释放
@@ -88,5 +99,24 @@ func TestReplyEndpoints(t *testing.T) {
 	u.release("k")
 	if _, ok := u.reserve("k", exp, 3); !ok {
 		t.Fatal("释放后应能再预留")
+	}
+
+	// 回复历史：按链接隔离，修改只改自己的
+	u.add("k", sentMsg{ID: 7, Text: "第一条", At: "10:00:00"})
+	u.add("other", sentMsg{ID: 8, Text: "没预留过的链接不记"})
+	if n, h := u.get("k"); n != 3 || len(h) != 1 || h[0].Text != "第一条" {
+		t.Fatalf("history = %d %v", n, h)
+	}
+	if _, ok := u.text("k", 8); ok {
+		t.Fatal("别的链接的消息不能改")
+	}
+	u.setText("k", 7, "改过")
+	if txt, ok := u.text("k", 7); !ok || txt != "改过" {
+		t.Fatalf("修改后 = %q %v", txt, ok)
+	}
+	_, h := u.get("k")
+	h[0].Text = "外部改副本"
+	if txt, _ := u.text("k", 7); txt != "改过" {
+		t.Fatal("get 应返回副本")
 	}
 }

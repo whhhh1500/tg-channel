@@ -1,4 +1,10 @@
 {{define "content"}}
+<style>
+#hist li{list-style:none;padding:.5rem 0;border-top:1px solid var(--pico-muted-border-color)}
+#hist li .t{white-space:pre-wrap}
+#hist li button{width:auto;padding:.15rem .6rem;font-size:.8rem;margin:0 0 0 .4rem}
+#hist li textarea{margin:.4rem 0}
+</style>
 <article id="box" style="max-width:520px;margin:auto">
   <p id="loading" aria-busy="true">正在读取…</p>
   <div id="main" hidden>
@@ -7,10 +13,12 @@
     <p><small>内容</small><br><span id="text" style="white-space:pre-wrap"></span></p>
     <form id="f">
       <textarea id="t" rows="3" placeholder="输入回复…" required maxlength="4000"></textarea>
+      <label><input type="checkbox" role="switch" id="quote"> 引用原消息</label>
       <button id="send">发送 (<span id="n">3</span>)</button>
     </form>
     <p id="msg"></p>
-    <p><small>链接 <span id="exp"></span> 过期，最多回复 3 次。</small> <a id="tg" hidden>打开 Telegram</a></p>
+    <div id="hbox" hidden><small>回复历史</small><ul id="hist" style="padding:0"></ul></div>
+    <p><small>链接 <span id="exp"></span> 过期，最多回复 3 次，修改不占次数。</small> <a id="tg" hidden>打开 Telegram</a></p>
   </div>
   <p id="err" hidden style="color:var(--pico-del-color)"></p>
 </article>
@@ -19,6 +27,7 @@
   const base = {{url ""}};
   const token = location.hash.slice(1);
   const $ = id => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const fail = m => { $('loading').hidden = true; $('err').hidden = false; $('err').textContent = m; };
   if (!token) return fail('链接不完整');
   const post = (p, body) => fetch(base + p, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(async r => [r.ok, await r.json()]);
@@ -29,14 +38,41 @@
   if (info.sender_id) $('sid').textContent = info.sender_id;
   $('text').textContent = info.text; $('exp').textContent = info.expires_at;
   if (info.deep_link) { $('tg').hidden = false; $('tg').href = info.deep_link; }
+
+  // 回复历史：最新的在上面，每条可以改
+  const addHist = m => {
+    $('hbox').hidden = false;
+    const li = el('li'), head = el('div'), t = el('div', 't', m.text), edit = el('button', 'outline secondary', '修改');
+    head.append(el('small', '', m.at), edit);
+    li.append(head, t);
+    edit.onclick = () => {
+      edit.hidden = true;
+      const ta = el('textarea'), save = el('button', '', '保存'), cancel = el('button', 'outline secondary', '取消'), tip = el('small');
+      ta.rows = 3; ta.maxLength = 4000; ta.value = m.text;
+      const bar = el('div'); bar.append(save, cancel, tip);
+      t.hidden = true; li.append(ta, bar);
+      const close = () => { ta.remove(); bar.remove(); t.hidden = false; edit.hidden = false; };
+      cancel.onclick = close;
+      save.onclick = async () => {
+        save.disabled = true; tip.textContent = ' 保存中…';
+        const [ok, r] = await post('/reply/edit', {token, id: m.id, text: ta.value});
+        if (!ok) { tip.textContent = ' ' + r.error; save.disabled = false; return; }
+        m.text = r.text; t.textContent = r.text; close();
+      };
+    };
+    $('hist').prepend(li);
+  };
+  (info.history || []).forEach(addHist);
+
   const setN = n => { $('n').textContent = n; if (n <= 0) { $('send').disabled = true; $('t').disabled = true; } };
   setN(info.remaining);
   $('f').onsubmit = async e => {
     e.preventDefault();
     $('send').disabled = true; $('msg').textContent = '发送中…';
-    const [ok, r] = await post('/reply/send', {token, text: $('t').value});
+    const [ok, r] = await post('/reply/send', {token, text: $('t').value, quote: $('quote').checked});
     if (!ok) { $('msg').textContent = r.error; $('send').disabled = $('n').textContent <= 0; return; }
     $('t').value = ''; $('msg').textContent = '已发送';
+    if (r.sent && r.sent.id) addHist(r.sent);
     setN(r.remaining); if (r.remaining > 0) $('send').disabled = false;
   };
 })();

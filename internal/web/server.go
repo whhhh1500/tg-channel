@@ -67,6 +67,7 @@ func New(cfg *config.Config, g *gorm.DB, tg *tgclient.Manager, p *push.Service) 
 	limit := func(c *gin.Context) { c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10) }
 	root.POST("/reply/open", limit, s.replyOpen)
 	root.POST("/reply/send", limit, s.replySend)
+	root.POST("/reply/edit", limit, s.replyEdit)
 
 	auth := root.Group("/", s.requireLogin)
 	auth.GET("/", func(c *gin.Context) { s.redirect(c, "/accounts") })
