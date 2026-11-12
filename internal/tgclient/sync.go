@@ -123,13 +123,21 @@ func (m *Manager) ensurePeer(accountID uint, e tg.Entities, peer tg.PeerClass) {
 	}
 	placeholder := fmt.Sprintf("%s %d", p.Kind, p.PeerID)
 	var old db.TgPeer
-	if err := m.db.Select("id", "title").Where("account_id = ? AND kind = ? AND peer_id = ?", accountID, p.Kind, p.PeerID).Limit(1).Find(&old).Error; err != nil {
+	if err := m.db.Select("id", "title", "access_hash").Where("account_id = ? AND kind = ? AND peer_id = ?", accountID, p.Kind, p.PeerID).Limit(1).Find(&old).Error; err != nil {
 		slog.Warn("lookup peer", "account", accountID, "err", err)
 		return
 	}
 	if old.ID != 0 {
+		set := map[string]any{}
 		if old.Title == placeholder && p.Title != "" {
-			m.db.Model(&db.TgPeer{}).Where("id = ?", old.ID).Updates(map[string]any{"title": p.Title, "username": p.Username})
+			set["title"], set["username"] = p.Title, p.Username
+		}
+		// 第一次见到时对方实体是 min / 缺失，access hash 记成了 0，回复会 PEER_ID_INVALID；拿到完整的就补上
+		if old.AccessHash == 0 && p.AccessHash != 0 {
+			set["access_hash"] = p.AccessHash
+		}
+		if len(set) > 0 {
+			m.db.Model(&db.TgPeer{}).Where("id = ?", old.ID).Updates(set)
 		}
 		return
 	}

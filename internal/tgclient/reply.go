@@ -3,10 +3,13 @@ package tgclient
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/gotd/td/telegram/message"
 	"github.com/gotd/td/tg"
+
+	"tgchannel/internal/db"
 )
 
 const replyInterval = 5 * time.Second // 每账号发送 / 修改间隔，防风控
@@ -17,6 +20,7 @@ func (m *Manager) target(ctx context.Context, accountID uint, kind string, peerI
 	if err != nil {
 		return nil, nil, err
 	}
+	accessHash = m.peerHash(ctx, api, accountID, kind, peerID, accessHash)
 	var peer tg.InputPeerClass
 	switch kind {
 	case "user":
@@ -36,6 +40,27 @@ func (m *Manager) target(ctx context.Context, accountID uint, kind string, peerI
 	}
 	m.lastReply[accountID] = time.Now()
 	return api, peer, nil
+}
+
+// peerHash 推送时对话的 access hash 还是 0（第一次见到时对方实体是 min / 缺失），带着 0 发会 PEER_ID_INVALID。
+// 先取库里最新的；库里也没有就同步一次对话列表（拉到的是完整 hash）再取。普通群不需要 hash。
+func (m *Manager) peerHash(ctx context.Context, api *tg.Client, accountID uint, kind string, peerID, h int64) int64 {
+	if h != 0 || kind == "chat" {
+		return h
+	}
+	load := func() int64 {
+		var p db.TgPeer
+		m.db.Select("access_hash").Where("account_id = ? AND kind = ? AND peer_id = ?", accountID, kind, peerID).Limit(1).Find(&p)
+		return p.AccessHash
+	}
+	if h = load(); h != 0 || api == nil {
+		return h
+	}
+	if _, err := syncPeers(ctx, m.db, accountID, api); err != nil {
+		slog.Warn("sync peers for access hash", "account", accountID, "err", err)
+		return 0
+	}
+	return load()
 }
 
 // Reply 用账号的常驻连接在对话里发一条消息，返回新消息 id。只在已收到消息的对话里回，不主动发起会话。

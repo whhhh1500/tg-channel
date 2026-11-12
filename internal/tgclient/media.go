@@ -205,6 +205,7 @@ func (m *Manager) Media(ctx context.Context, accountID uint, kind string, peerID
 	ids := []tg.InputMessageClass{&tg.InputMessageID{ID: msgID}}
 	var res tg.MessagesMessagesClass
 	if kind == "channel" {
+		accessHash = m.peerHash(ctx, api, accountID, kind, peerID, accessHash)
 		res, err = api.ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{Channel: &tg.InputChannel{ChannelID: peerID, AccessHash: accessHash}, ID: ids})
 	} else {
 		res, err = api.MessagesGetMessages(ctx, ids)

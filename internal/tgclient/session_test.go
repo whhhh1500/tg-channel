@@ -152,6 +152,40 @@ func TestEnsurePeer(t *testing.T) {
 	if c2.Title != "改过的名" || !c2.Monitored {
 		t.Fatalf("existing peer changed: %+v", c2)
 	}
+
+	// 第一次是 min 实体（hash 不能用，记 0），之后拿到完整实体补上；已有的 hash 不被 min 覆盖
+	minU := tg.Entities{Users: map[int64]*tg.User{8: {ID: 8, Min: true, FirstName: "Kelly", AccessHash: 111}}}
+	m.ensurePeer(1, minU, &tg.PeerUser{UserID: 8})
+	hashOf := func(id int64) int64 {
+		var p db.TgPeer
+		g.Where("account_id = 1 AND kind = 'user' AND peer_id = ?", id).First(&p)
+		return p.AccessHash
+	}
+	if h := hashOf(8); h != 0 {
+		t.Fatalf("min 用户的 hash 不该存: %d", h)
+	}
+	if h := m.peerHash(context.Background(), nil, 1, "user", 8, 0); h != 0 {
+		t.Fatalf("库里也没有时应为 0: %d", h)
+	}
+	m.ensurePeer(1, tg.Entities{Users: map[int64]*tg.User{8: {ID: 8, FirstName: "Kelly", AccessHash: 222}}}, &tg.PeerUser{UserID: 8})
+	if h := hashOf(8); h != 222 {
+		t.Fatalf("应补上完整 hash: %d", h)
+	}
+	m.ensurePeer(1, minU, &tg.PeerUser{UserID: 8})
+	if h := hashOf(8); h != 222 {
+		t.Fatalf("min 实体不该覆盖已有 hash: %d", h)
+	}
+
+	// 发送时 token 里是 0：取库里的；token 里有就直接用；普通群不需要
+	if h := m.peerHash(context.Background(), nil, 1, "user", 8, 0); h != 222 {
+		t.Fatalf("peerHash 应取库里的: %d", h)
+	}
+	if h := m.peerHash(context.Background(), nil, 1, "user", 8, 5); h != 5 {
+		t.Fatalf("token 里有 hash 时直接用: %d", h)
+	}
+	if h := m.peerHash(context.Background(), nil, 1, "chat", 5, 0); h != 0 {
+		t.Fatalf("普通群: %d", h)
+	}
 }
 
 // 发送结果里取新消息 id：私聊是短更新，超级群 / 频道在 UpdateMessageID 里。
