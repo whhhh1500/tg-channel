@@ -207,6 +207,7 @@ func (s *Server) deleteAccountData(acc db.TgAccount) {
 			"DELETE FROM messages WHERE account_id = ?",
 			"DELETE FROM tg_peers WHERE account_id = ?",
 			"DELETE FROM channels WHERE account_id = ?",
+			"DELETE FROM api_topics WHERE account_id = ?", // 主题走这个账号的渠道，账号没了 key 一并失效
 			"DELETE FROM tg_states WHERE account_id = ?",
 			"DELETE FROM tg_channel_states WHERE account_id = ?",
 			"DELETE FROM tg_accounts WHERE id = ?",

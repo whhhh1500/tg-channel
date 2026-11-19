@@ -14,6 +14,19 @@ type limiter struct {
 
 func newLimiter() *limiter { return &limiter{hits: map[string][]time.Time{}} }
 
+// full key 在 window 内是否已满 max 次：只看不记，用于"失败才计数"的场景。
+func (l *limiter) full(key string, max int, window time.Duration) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now, n := time.Now(), 0
+	for _, t := range l.hits[key] {
+		if now.Sub(t) <= window {
+			n++
+		}
+	}
+	return n >= max
+}
+
 func (l *limiter) allow(key string, max int, window time.Duration) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()

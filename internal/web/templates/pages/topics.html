@@ -1,0 +1,116 @@
+{{define "content"}}
+<style>
+td.ops{white-space:nowrap}td.ops form{display:inline;margin:0}
+td.ops a,td.ops button{width:auto;padding:.15rem .55rem;font-size:.8rem;margin:0 .2rem 0 0;display:inline-block}
+#doc pre{font-size:.82rem;padding:.6rem .8rem;white-space:pre-wrap;word-break:break-all}
+#doc table{font-size:.85rem}
+</style>
+<h3>通知设置</h3>
+<div class="tabs"><a href="{{url "/peers"}}">TG 对话</a><a href="{{url "/topics"}}" class="on">对外接口</a></div>
+<p><small>每个主题一个 key，外部系统调接口就能推到手机。消息和 TG 消息走同一个推送渠道、同一个队列（失败自动重试），标题带「图标 [主题名]」区分；推送状态在「消息记录」里看。</small></p>
+
+{{if not .Accounts}}
+<p>先在 <a href="{{url "/accounts"}}">我的 TG</a> 添加账号：接口消息用账号已配好的 ntfy / Bark 推送。</p>
+{{else}}
+
+{{if .Topics}}
+<div style="overflow-x:auto">
+<table class="r">
+<thead><tr><th>主题</th><th>标识</th><th>Key</th>{{if gt (len .Accounts) 1}}<th>推送到</th>{{end}}<th>调用</th><th>启用</th><th>操作</th></tr></thead>
+<tbody>{{range .Topics}}
+<tr>
+  <td data-label="主题">{{.Icon}} {{.Name}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
+  <td data-label="标识"><span class="nm" data-copy="{{.Code}}" title="点击复制">{{.Code}}</span></td>
+  <td data-label="Key"><code>{{.KeyPrefix}}…</code></td>
+  {{if gt (len $.Accounts) 1}}<td data-label="推送到">{{or .Account "已删除"}}</td>{{end}}
+  <td data-label="调用">{{.Calls}}{{if .Last}} <small>最近 {{.Last}}</small>{{end}}</td>
+  <td data-label="启用"><input type="checkbox" role="switch" {{if .Enabled}}checked{{end}} hx-post="{{url "/topics/"}}{{.ID}}/toggle" hx-swap="none"></td>
+  <td data-label="操作" class="ops">
+    <a href="{{url "/topics"}}?edit={{.ID}}#form" role="button" class="outline secondary">编辑</a>
+    <form method="post" action="{{url "/topics/"}}{{.ID}}/key" onsubmit="return confirm('重置后旧 key 立即失效，调用方要换成新 key。确定？')"><button class="outline secondary">重置 key</button></form>
+    <form method="post" action="{{url "/topics/"}}{{.ID}}/delete" onsubmit="return confirm('删除主题「{{.Name}}」？用它的调用方会收到 401。')"><button class="outline contrast">删除</button></form>
+  </td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p>还没有主题，在下面新建一个。</p>{{end}}
+
+<article id="form">
+<header><strong>{{if .Edit}}编辑主题「{{.Edit.Name}}」{{else}}新增主题{{end}}</strong>{{if not .Edit}} <small>最多 {{.Max}} 个</small>{{end}}</header>
+<form method="post" action="{{if .Edit}}{{url "/topics/"}}{{.Edit.ID}}{{else}}{{url "/topics"}}{{end}}">
+  <div class="grid">
+    <label>名称
+      <input name="name" required maxlength="20" placeholder="如 调研问卷" value="{{with .Edit}}{{.Name}}{{end}}">
+      <small>推送标题里显示为 [名称]</small>
+    </label>
+    <label>主题标识
+      {{if .Edit}}<input value="{{.Edit.Code}}" disabled><small>创建后不能改，改了调用方会失效</small>
+      {{else}}<input name="code" required maxlength="32" pattern="[A-Za-z0-9_\-]{1,32}" placeholder="如 survey"><small>字母、数字、- 和 _，写在接口地址里</small>{{end}}
+    </label>
+  </div>
+  <div class="grid">
+    <label>图标
+      <input name="icon" maxlength="16" value="{{if .Edit}}{{.Edit.Icon}}{{else}}📮{{end}}">
+      <small>显示在标题最前面，可留空</small>
+    </label>
+    {{if gt (len .Accounts) 1}}
+    <label>推送到
+      <select name="account" required>
+        {{range .Accounts}}<option value="{{.ID}}" {{if and $.Edit (eq .ID $.Edit.AccountID)}}selected{{end}}>{{.TgUserID}} {{.FirstName}}</option>{{end}}
+      </select>
+      <small>用这个 TG 账号的 ntfy / Bark 渠道</small>
+    </label>
+    {{else}}<div></div>{{end}}
+  </div>
+  <label>备注<input name="note" maxlength="100" placeholder="选填，如 给问卷系统用" value="{{with .Edit}}{{.Note}}{{end}}"></label>
+  <button style="width:auto">{{if .Edit}}保存{{else}}创建并生成 key{{end}}</button>
+  {{if .Edit}}<a href="{{url "/topics"}}" style="margin-left:.8rem">取消</a>{{end}}
+</form>
+</article>
+{{end}}
+
+<details id="doc"{{if not .Topics}} open{{end}}>
+<summary><strong>接口文档</strong></summary>
+<h5>地址</h5>
+<pre><code>POST {{.APIBase}}&lt;主题标识&gt;
+Authorization: Bearer &lt;key&gt;</code></pre>
+<p><small>key 只能放在请求头里，不支持放在网址参数里（会进访问日志）。key 和主题标识必须对应。</small></p>
+
+<h5>请求体</h5>
+<p><small><code>Content-Type: application/json</code> 时按下表读字段；其他类型（如 <code>curl -d</code> 默认的表单类型、<code>text/plain</code>）整个请求体当作正文。请求体最大 64KB。</small></p>
+<table>
+<thead><tr><th>字段</th><th>必填</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>message</code></td><td>是</td><td>正文，最多 4000 字；超过推送服务单条上限的部分会截断</td></tr>
+<tr><td><code>title</code></td><td>否</td><td>标题，最多 100 字。通知显示为「图标 [主题名] 标题」，不传只显示「图标 [主题名]」</td></tr>
+<tr><td><code>priority</code></td><td>否</td><td>1–5，默认 3。4、5 会响铃 / 弹出（仅 ntfy）</td></tr>
+<tr><td><code>click</code></td><td>否</td><td>点通知打开的网址，只能是 http / https（仅 ntfy）</td></tr>
+<tr><td><code>tags</code></td><td>否</td><td>附加标签，最多 3 个，每个 1–20 字。主题标识总会作为第一个标签（仅 ntfy）</td></tr>
+</tbody>
+</table>
+
+<h5>示例</h5>
+<pre><code>curl -H "Authorization: Bearer &lt;key&gt;" -d "有新的问卷提交" {{.APIBase}}survey
+
+curl -H "Authorization: Bearer &lt;key&gt;" -H "Content-Type: application/json" \
+  -d '{"title":"新问卷","message":"张三提交了满意度问卷","priority":4,"click":"https://example.com/s/123"}' \
+  {{.APIBase}}survey</code></pre>
+
+<h5>返回</h5>
+<table>
+<thead><tr><th>状态码</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>202</td><td><code>{"ok":true,"id":123}</code> 已进推送队列，通常一秒内送达；失败会自动重试（最多 8 次，间隔逐步拉长到 1 小时）</td></tr>
+<tr><td>400</td><td>参数错误，<code>error</code> 里有原因</td></tr>
+<tr><td>401</td><td>key 无效，或 key 和主题标识不对应</td></tr>
+<tr><td>403</td><td>主题已停用</td></tr>
+<tr><td>409</td><td>推送账号的 ntfy / Bark 都已停用</td></tr>
+<tr><td>413</td><td>请求体超过 64KB</td></tr>
+<tr><td>429</td><td>每个主题每分钟最多 60 次；同一 IP 10 分钟内 key 错 10 次会被暂时拒绝。按 <code>Retry-After</code>（秒）等待后重试</td></tr>
+<tr><td>503</td><td>推送队列积压过多，稍后重试</td></tr>
+</tbody>
+</table>
+<p><small>出错时返回 <code>{"ok":false,"error":"原因"}</code>。正文和标题不落库，只在推送前存在内存里；服务重启时还没推出去的会丢失，记录里显示失败。</small></p>
+</details>
+{{end}}

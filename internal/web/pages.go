@@ -79,6 +79,8 @@ type messageRow struct {
 	db.Message
 	Peer      string
 	PeerUser  string
+	Topic     string // 接口消息的主题名和图标
+	TopicIcon string
 	PushState string // 最近一次推送状态
 	PushAt    *time.Time
 	PushError string
@@ -92,10 +94,11 @@ func (s *Server) messagesPage(c *gin.Context) {
 	}
 	var rows []messageRow
 	q.
-		Select(`messages.*, tg_peers.title AS peer, tg_peers.username AS peer_user,
+		Select(`messages.*, tg_peers.title AS peer, tg_peers.username AS peer_user, api_topics.name AS topic, api_topics.icon AS topic_icon,
 			pl.status AS push_state, pl.sent_at AS push_at, pl.error AS push_error`).
 		Joins("JOIN tg_accounts ON tg_accounts.id = messages.account_id AND tg_accounts.user_id = ?", s.currentUser(c).ID).
 		Joins("LEFT JOIN tg_peers ON tg_peers.id = messages.peer_id").
+		Joins("LEFT JOIN api_topics ON api_topics.id = messages.topic_id").
 		// 每条消息只取最新一条推送记录
 		Joins("LEFT JOIN push_logs pl ON pl.id = (SELECT id FROM push_logs WHERE message_id = messages.id ORDER BY id DESC LIMIT 1)").
 		Order("messages.id DESC").Limit(pageSize + 1).Scan(&rows)

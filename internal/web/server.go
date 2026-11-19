@@ -72,6 +72,7 @@ func New(cfg *config.Config, g *gorm.DB, tg *tgclient.Manager, p *push.Service) 
 	root.POST("/reply/media", limit, s.replyMedia)
 	root.GET("/reply/file/:id", s.replyFile)
 	root.HEAD("/reply/file/:id", s.replyFile)
+	root.POST("/api/v1/push/:code", limit, s.apiPush) // 对外接口：凭主题 key，不需要登录
 
 	auth := root.Group("/", s.requireLogin)
 	auth.GET("/", func(c *gin.Context) { s.redirect(c, "/accounts") })
@@ -91,6 +92,12 @@ func New(cfg *config.Config, g *gorm.DB, tg *tgclient.Manager, p *push.Service) 
 	auth.POST("/peers/:id/toggle", s.togglePeer("monitored"))
 	auth.POST("/peers/:id/mute", s.togglePeer("muted"))
 	auth.POST("/accounts/:id/monitor-all", s.toggleMonitorAll)
+	auth.GET("/topics", s.topicsPage)
+	auth.POST("/topics", s.createTopic)
+	auth.POST("/topics/:id", s.updateTopic)
+	auth.POST("/topics/:id/toggle", s.toggleTopic)
+	auth.POST("/topics/:id/key", s.resetTopicKey)
+	auth.POST("/topics/:id/delete", s.deleteTopic)
 	auth.GET("/messages", s.messagesPage)
 
 	admin := auth.Group("/admin", s.requireAdmin)
@@ -255,7 +262,9 @@ func (s *Server) render(c *gin.Context, page string, data gin.H) {
 	if nav == "admin" && len(segs) > 1 {
 		nav += "/" + segs[1]
 	}
-	data["Nav"] = nav
+	if _, ok := data["Nav"]; !ok { // 页面可以自己指定，如对外接口归在"通知设置"下
+		data["Nav"] = nav
+	}
 	c.HTML(http.StatusOK, page, data)
 }
 

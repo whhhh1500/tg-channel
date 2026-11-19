@@ -1,5 +1,6 @@
 {{define "content"}}
 <h3>通知设置</h3>
+<div class="tabs"><a href="{{url "/peers"}}" class="on">TG 对话</a><a href="{{url "/topics"}}">对外接口</a></div>
 <p><small>打开"监控转发"的对话，新消息会转发到账号配置的渠道。"永不监听"优先级最高，打开后该对话的消息一律忽略。新对话收到消息后自动出现在列表里。</small></p>
 <select onchange="location='{{url "/peers"}}'+(this.value?'?account='+this.value:'')" style="max-width:360px">
   <option value="">全部账号</option>

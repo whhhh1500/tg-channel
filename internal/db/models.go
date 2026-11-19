@@ -51,10 +51,28 @@ type Channel struct {
 	CreatedAt time.Time
 }
 
+// ApiTopic 对外接口的一个主题：外部系统凭 key 调接口推送，走 AccountID 那个 TG 账号的渠道。
+type ApiTopic struct {
+	ID        uint   `gorm:"primaryKey"`
+	UserID    uint   `gorm:"uniqueIndex:idx_topic_code"`
+	AccountID uint   `gorm:"index"`
+	Code      string `gorm:"uniqueIndex:idx_topic_code;size:32"` // 主题标识，写在接口地址里，创建后不改
+	Name      string `gorm:"size:64"`                            // 推送标题里的 [名称]
+	Icon      string `gorm:"size:32"`
+	Note      string
+	KeyHash   string `gorm:"uniqueIndex;size:64"` // key 的 sha256，原文只在创建 / 重置时显示一次
+	KeyPrefix string `gorm:"size:16"`
+	Enabled   bool
+	Calls     int64
+	LastAt    *time.Time
+	CreatedAt time.Time
+}
+
 type Message struct {
 	ID         uint `gorm:"primaryKey"`
 	AccountID  uint `gorm:"index:idx_msg_acc_recv"`
-	PeerID     uint `gorm:"index"`
+	PeerID     uint `gorm:"index"`              // TG 对话；接口消息为 0
+	TopicID    uint `gorm:"not null;default:0"` // 接口消息的主题；TG 消息为 0
 	TgMsgID    int
 	Sender     string // 发送者显示名
 	SenderUser string // 发送者 @用户名

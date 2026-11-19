@@ -1,0 +1,17 @@
+{{define "content"}}
+<h3>通知设置</h3>
+<div class="tabs"><a href="{{url "/peers"}}">TG 对话</a><a href="{{url "/topics"}}" class="on">对外接口</a></div>
+<article>
+<header><strong>{{.Title}}</strong></header>
+<p style="color:var(--pico-del-color)">现在就复制保存 key：<strong>离开本页后不会再显示</strong>，忘了只能重置。</p>
+<table style="font-size:.9em">
+  <tr><td style="white-space:nowrap">主题</td><td>{{.Topic.Icon}} {{.Topic.Name}}</td></tr>
+  <tr><td>主题标识</td><td><span class="nm" data-copy="{{.Topic.Code}}" title="点击复制">{{.Topic.Code}}</span></td></tr>
+  <tr><td>Key</td><td><span class="nm" data-copy="{{.Key}}" title="点击复制" style="white-space:normal;word-break:break-all">{{.Key}}</span></td></tr>
+  <tr><td>接口地址</td><td><code style="word-break:break-all">{{.URL}}</code></td></tr>
+</table>
+<p><small>点标识或 key 即可复制。试一下（会真的推到手机）：</small></p>
+<pre style="font-size:.82rem;padding:.6rem .8rem;white-space:pre-wrap;word-break:break-all"><code>curl -H "Authorization: Bearer {{.Key}}" -d "测试消息" {{.URL}}</code></pre>
+<p><a href="{{url "/topics"}}">返回对外接口</a> · 字段说明见对外接口页底部的「接口文档」</p>
+</article>
+{{end}}

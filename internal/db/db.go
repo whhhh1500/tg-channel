@@ -34,7 +34,7 @@ func OpenFile(path string) (*gorm.DB, error) {
 	// SQLite 只有一个写者，单连接最省事也不会 "database is locked"。
 	sqlDB.SetMaxOpenConns(1)
 
-	if err := g.AutoMigrate(&User{}, &TgAccount{}, &TgPeer{}, &Channel{}, &Message{}, &PushLog{}, &Provider{}, &TgState{}, &TgChannelState{}); err != nil {
+	if err := g.AutoMigrate(&User{}, &TgAccount{}, &TgPeer{}, &Channel{}, &Message{}, &PushLog{}, &Provider{}, &TgState{}, &TgChannelState{}, &ApiTopic{}); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	// 旧库升级：新加的列对已有行是 NULL，回填成 0

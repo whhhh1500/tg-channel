@@ -29,8 +29,11 @@ const (
 	pushBodyBytes = 3600 // ntfy 单条 4096 字节上限，留余量
 )
 
-// body 一条消息在内存里的内容：正文、媒体说明、可预览类型。
-type body struct{ text, media, preview string }
+// body 一条消息在内存里的内容：正文、媒体说明、可预览类型；接口消息另带 api。
+type body struct {
+	text, media, preview string
+	api                  *apiExtra
+}
 
 type Service struct {
 	cfg  *config.Config
@@ -158,19 +161,28 @@ func (s *Service) HandleMessage(in tgclient.Incoming) {
 	}
 	var chs []db.Channel
 	s.db.Where("account_id = ? AND enabled = ?", in.AccountID, true).Find(&chs)
+	msg := db.Message{AccountID: in.AccountID, PeerID: peer.ID, TgMsgID: in.MsgID, Sender: in.Sender, SenderUser: in.SenderUser, SenderID: in.SenderID, SentAt: in.SentAt, ReceivedAt: time.Now()}
+	if _, err := s.enqueue(msg, chs, body{text: in.Text, media: in.Media, preview: in.Preview}); err != nil {
+		slog.Error("save message", "err", err)
+		return
+	}
+	s.kick()
+}
 
-	// 库里只存元数据，正文进内存队列。
-	// 每次尝试都用全新对象：GORM 会把回滚掉的自增 ID 写回结构体，复用会变成主键冲突；
-	// 失败的尝试放进内存的正文当场清掉。
+// enqueue 一个事务里写消息元数据和各渠道的推送任务，正文只进内存队列。返回消息 id。
+// 每次尝试都用全新对象：GORM 会把回滚掉的自增 ID 写回结构体，复用会变成主键冲突；
+// 失败的尝试放进内存的正文当场清掉。
+func (s *Service) enqueue(msg db.Message, chs []db.Channel, b body) (uint, error) {
+	var id uint
 	err := retry(3, func() error {
-		msg := db.Message{AccountID: in.AccountID, PeerID: peer.ID, TgMsgID: in.MsgID, Sender: in.Sender, SenderUser: in.SenderUser, SenderID: in.SenderID, SentAt: in.SentAt, ReceivedAt: time.Now()}
+		m := msg
 		var logs []db.PushLog
 		err := s.db.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Create(&msg).Error; err != nil {
+			if err := tx.Create(&m).Error; err != nil {
 				return err
 			}
 			for _, ch := range chs {
-				l := db.PushLog{MessageID: msg.ID, ChannelID: ch.ID, Status: "pending", NextAt: time.Now()}
+				l := db.PushLog{MessageID: m.ID, ChannelID: ch.ID, Status: "pending", NextAt: time.Now()}
 				if err := tx.Create(&l).Error; err != nil {
 					return err
 				}
@@ -179,7 +191,7 @@ func (s *Service) HandleMessage(in tgclient.Incoming) {
 			// 提交前就把正文放进内存，worker 看到 pending 时一定能取到
 			s.tmu.Lock()
 			for _, l := range logs {
-				s.texts[l.ID] = body{in.Text, in.Media, in.Preview}
+				s.texts[l.ID] = b
 			}
 			s.tmu.Unlock()
 			return nil
@@ -188,13 +200,16 @@ func (s *Service) HandleMessage(in tgclient.Incoming) {
 			for _, l := range logs {
 				s.forget(l.ID)
 			}
+			return err
 		}
-		return err
+		id = m.ID
+		return nil
 	})
-	if err != nil {
-		slog.Error("save message", "err", err)
-		return
-	}
+	return id, err
+}
+
+// kick 唤醒派发循环，不阻塞。
+func (s *Service) kick() {
 	select {
 	case s.wake <- struct{}{}:
 	default:
@@ -309,18 +324,26 @@ func (s *Service) deliver(ctx context.Context, l db.PushLog) bool {
 		s.forget(l.ID)
 		return s.setLog(&l, map[string]any{"status": "failed", "error": "渠道已停用"}) == nil
 	}
-	s.db.First(&peer, msg.PeerID)
-
 	s.tmu.Lock()
 	b, ok := s.texts[l.ID]
 	s.tmu.Unlock()
 	if !ok { // 正文只在内存，进程重启过就没了
 		return s.setLog(&l, map[string]any{"status": "failed", "error": "进程重启，正文已丢弃"}) == nil
 	}
-	title := peer.Title
-	body := strings.TrimSpace(b.media + " " + b.text)
-	if msg.Sender != "" && msg.Sender != peer.Title {
-		body = msg.Sender + ": " + body
+	var title, body string
+	var extra map[string]any
+	if b.api != nil { // 对外接口的消息：标题带 [主题名]，没有回复按钮
+		var t db.ApiTopic
+		s.db.Select("name", "icon", "code").Where("id = ?", msg.TopicID).Limit(1).Find(&t) // 主题删了也照推
+		title, extra = apiTitle(t, b.api)
+		body = b.text
+	} else {
+		s.db.First(&peer, msg.PeerID)
+		title = peer.Title
+		body = strings.TrimSpace(b.media + " " + b.text)
+		if msg.Sender != "" && msg.Sender != peer.Title {
+			body = msg.Sender + ": " + body
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -330,7 +353,11 @@ func (s *Service) deliver(ctx context.Context, l db.PushLog) bool {
 	case "bark":
 		err = bark.NewWithServers(ch.Target, s.serverFor(ch)).Send(ctx, title, fitBytes(body, pushBodyBytes))
 	case "ntfy":
-		err = s.ntfyOrAnon().publish(ctx, s.serverFor(ch), ch.Target, title, fitBytes(body, pushBodyBytes), "", s.replyActions(msg, peer, b))
+		var actions []action
+		if b.api == nil {
+			actions = s.replyActions(msg, peer, b)
+		}
+		err = s.ntfyOrAnon().publish(ctx, s.serverFor(ch), ch.Target, title, fitBytes(body, pushBodyBytes), actions, extra)
 	default:
 		err = fmt.Errorf("未知渠道类型 %s", ch.Kind)
 	}

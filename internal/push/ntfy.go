@@ -55,15 +55,15 @@ type action struct {
 	Clear  bool   `json:"clear,omitempty"`
 }
 
-// publish 用 JSON 方式发布：标题和按钮里的中文不用再做 header 编码。
-func (n *ntfyClient) publish(ctx context.Context, server, topic, title, body, click string, actions []action) error {
+// publish 用 JSON 方式发布：标题和按钮里的中文不用再做 header 编码。extra 是附加字段（priority / tags / click）。
+func (n *ntfyClient) publish(ctx context.Context, server, topic, title, body string, actions []action, extra map[string]any) error {
 	c := n
 	if server != "" && strings.TrimRight(server, "/") != n.base {
 		c = newNtfy(server, "", "") // 用户自填的服务器绝不带平台凭据
 	}
 	msg := map[string]any{"topic": topic, "title": title, "message": body}
-	if click != "" {
-		msg["click"] = click
+	for k, v := range extra {
+		msg[k] = v
 	}
 	if len(actions) > 0 {
 		msg["actions"] = actions

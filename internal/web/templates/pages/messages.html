@@ -11,8 +11,13 @@ td.c{min-width:9em;max-width:420px}
 <thead><tr><th>对话</th><th>发送者</th><th>内容</th><th>发送</th><th>到达</th><th>转发</th></tr></thead>
 <tbody>{{range .Messages}}
 <tr>
+  {{if .TopicID}}
+  <td data-label="对话" class="n">{{.TopicIcon}} [{{or .Topic "已删除的主题"}}]</td>
+  <td data-label="发送者" class="n"><small>接口 {{.Sender}}</small></td>
+  {{else}}
   <td data-label="对话" class="n">{{name .PeerUser .Peer 0}}</td>
   <td data-label="发送者" class="n">{{name .SenderUser .Sender .SenderID}}</td>
+  {{end}}
   <td data-label="内容" class="c">{{clip .Text}}</td>
   <td data-label="发送" class="t">{{tsec .SentAt}}</td>
   <td data-label="到达" class="t">{{rel .ReceivedAt .SentAt}}</td>
