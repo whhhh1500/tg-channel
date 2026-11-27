@@ -58,7 +58,7 @@ func TestReplyEndpoints(t *testing.T) {
 	p.Exp = time.Now().Add(time.Hour).Unix()
 	tok, _ = reply.Sign("sec", p)
 	code, m := post("/reply/open", map[string]string{"token": tok})
-	if code != 200 || m["sender"] != "Bob" || m["peer"] != "群" || m["remaining"].(float64) != 3 {
+	if code != 200 || m["sender"] != "Bob" || m["peer"] != "群" || m["remaining"].(float64) != 3 || m["sent_at"] != nil {
 		t.Fatalf("open = %d %v", code, m)
 	}
 	if code, m := post("/reply/send", map[string]string{"token": tok, "text": ""}); code != 400 {
@@ -89,6 +89,13 @@ func TestReplyEndpoints(t *testing.T) {
 	mtok, _ := reply.Sign("sec", pm)
 	if _, m := post("/reply/open", map[string]string{"token": mtok}); m["media"] != "[图片 1280×960 12K]" || m["preview"] != "image" || m["text"] != "配文" {
 		t.Fatalf("open 应带媒体说明: %v", m)
+	}
+	// 新链接带消息时间，旧链接（没有 At）不显示
+	at := time.Date(2026, 11, 27, 9, 5, 7, 0, time.Local)
+	pm.At = at.Unix()
+	mtok, _ = reply.Sign("sec", pm)
+	if _, m := post("/reply/open", map[string]string{"token": mtok}); m["sent_at"] != "11-27 09:05:07" {
+		t.Fatalf("open 应带消息时间: %v", m["sent_at"])
 	}
 	// 只能改这个链接发出的回复
 	if code, m := post("/reply/edit", map[string]any{"token": tok, "id": 123, "text": "改"}); code != 404 {

@@ -1,34 +1,88 @@
 {{define "content"}}
 <style>
-#hist li{list-style:none;padding:.5rem 0;border-top:1px solid var(--pico-muted-border-color)}
-#hist li .t{white-space:pre-wrap}
-#hist li button{width:auto;padding:.15rem .6rem;font-size:.8rem;margin:0 0 0 .4rem}
-#hist li textarea{margin:.4rem 0}
-#mbox img,#mbox video{display:block;max-width:100%;max-height:70vh;margin:.4rem 0;border-radius:4px}
-#mbox audio{width:100%;margin:.4rem 0}
-#mbox iframe{width:100%;height:70vh;border:1px solid var(--pico-muted-border-color);margin:.4rem 0}
-#mbox pre{white-space:pre-wrap;max-height:60vh;overflow:auto;font-size:.85rem;padding:.6rem}
+#box{max-width:560px;margin:0 auto;padding:0;overflow:hidden;border-radius:.8rem}
+#box .hd{padding:.95rem 1.15rem .8rem;border-bottom:1px solid var(--pico-muted-border-color);background:var(--pico-card-sectioning-background-color)}
+#box .peer{font-size:1.1rem;font-weight:650;color:#111827;line-height:1.35;word-break:break-word}
+#box .meta{display:flex;flex-wrap:wrap;align-items:center;gap:.15rem .45rem;margin-top:.25rem;font-size:.84rem;color:var(--pico-muted-color)}
+#box .meta .who{color:#374151;font-weight:500}
+#box .meta .at{margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
+#box .bd{padding:1rem 1.15rem 1.1rem}
+/* 原消息 */
+.bubble{background:#f3f5f8;border:1px solid #e6e9ef;border-radius:.25rem 1rem 1rem 1rem;padding:.7rem .9rem;line-height:1.65;word-break:break-word}
+.bubble #text{white-space:pre-wrap}
+.bubble #text:empty{display:none}
+.mtag{display:flex;flex-wrap:wrap;align-items:center;gap:.45rem;font-size:.88rem;color:#4b5563}
+.mtag:has(+ #mbox:not([hidden])),.mtag:has(~ #text:not(:empty)){margin-bottom:.45rem}
+#pv{font-size:.8rem;line-height:1.5;padding:.05rem .65rem;border:1px solid #cfe0fb;border-radius:999px;background:#eaf3ff;color:var(--pico-primary);text-decoration:none}
+#pv:hover{background:#dce9fd}
+#pmsg{font-size:.8rem}
+#mbox{margin:.1rem 0 .5rem}
+#mbox img,#mbox video{display:block;max-width:100%;max-height:70vh;border-radius:.5rem}
+#mbox audio{width:100%}
+#mbox iframe{width:100%;height:70vh;border:1px solid var(--pico-muted-border-color);border-radius:.5rem}
+#mbox pre{white-space:pre-wrap;max-height:60vh;overflow:auto;font-size:.85rem;padding:.6rem;margin:0;background:#fff;border-radius:.5rem}
+#mbox a{display:inline-block;margin-top:.35rem;font-size:.85rem}
+/* 输入 */
+#f{margin:1.1rem 0 0}
+#f textarea{margin:0 0 .6rem;min-height:5.2rem;resize:vertical;font-size:.95rem}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:.8rem}
+.bar label{margin:0;font-size:.9rem;color:#374151}
+.bar button{width:auto;margin:0;padding:.45rem 1.25rem;white-space:nowrap}
+.bar button small{color:inherit;opacity:.8;font-size:.8em;margin-left:.15rem}
+#msg{min-height:1.3em;margin:.45rem 0 0;font-size:.86rem;color:var(--pico-muted-color);text-align:right}
+#msg.err{color:var(--pico-del-color)}#msg.ok{color:#2a9d3c}
+/* 回复历史：自己发的，靠右蓝色气泡 */
+.hh{display:flex;align-items:center;gap:.6rem;margin:1rem 0 .6rem;font-size:.78rem;color:var(--pico-muted-color)}
+.hh::before,.hh::after{content:"";flex:1;border-top:1px solid var(--pico-muted-border-color)}
+#hist{padding:0;margin:0;display:flex;flex-direction:column;gap:.55rem}
+#hist li{list-style:none;margin:0;align-self:flex-end;max-width:88%;background:#e8effc;border:1px solid #d6e3fb;border-radius:1rem .25rem 1rem 1rem;padding:.5rem .8rem .4rem}
+#hist li .t{white-space:pre-wrap;word-break:break-word;line-height:1.6}
+#hist li .h{display:flex;justify-content:flex-end;align-items:center;gap:.6rem;font-size:.74rem;color:var(--pico-muted-color);margin-top:.15rem}
+#hist li .h a{color:var(--pico-primary);text-decoration:none;cursor:pointer}
+#hist li.editing{align-self:stretch;max-width:none}
+#hist li textarea{margin:.1rem 0 .45rem;font-size:.93rem;background:#fff}
+#hist li .eb{display:flex;gap:.45rem;align-items:center;justify-content:flex-end}
+#hist li .eb button{width:auto;margin:0;padding:.25rem .9rem;font-size:.82rem}
+#hist li .eb small{margin-right:auto;font-size:.8rem}
+/* 底部 */
+#box .ft{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.4rem .8rem;padding:.65rem 1.15rem;border-top:1px solid var(--pico-muted-border-color);background:var(--pico-card-sectioning-background-color);font-size:.78rem;color:var(--pico-muted-color)}
+#box .ft a{width:auto;margin:0;padding:.22rem .8rem;font-size:.8rem}
+#box .state{padding:2.2rem 1.15rem;text-align:center;color:var(--pico-muted-color)}
+#box .state.err{color:var(--pico-del-color)}
+@media (max-width:768px){
+  #box{border-radius:.7rem}#box .bd{padding:.9rem 1rem 1rem}#box .hd,#box .ft{padding-left:1rem;padding-right:1rem}
+  #f textarea,#hist li textarea{font-size:16px} /* 小于 16px 时 iOS 点输入框会整页放大 */
+}
 </style>
-<article id="box" style="max-width:520px;margin:auto">
-  <p id="loading" aria-busy="true">正在读取…</p>
+<article id="box">
+  <p id="loading" class="state" aria-busy="true">正在读取…</p>
+  <p id="err" class="state err" hidden></p>
   <div id="main" hidden>
-    <p><small>对话</small><br><strong id="peer"></strong></p>
-    <p><small>发送者</small><br><span id="sender"></span> <span id="sid" class="nm"></span></p>
-    <div style="margin-bottom:var(--pico-spacing)"><small>内容</small>
-      <div id="media" hidden><span id="ml"></span> <a href="#" id="pv" hidden>预览</a> <small id="pmsg"></small></div>
-      <div id="mbox" hidden></div>
-      <div id="text" style="white-space:pre-wrap"></div>
+    <div class="hd">
+      <div class="peer" id="peer"></div>
+      <div class="meta"><span class="who" id="sender"></span><span id="sid" class="nm" title="点击复制"></span><span class="at" id="at"></span></div>
     </div>
-    <form id="f">
-      <textarea id="t" rows="3" placeholder="输入回复…" required maxlength="4000"></textarea>
-      <label><input type="checkbox" role="switch" id="quote"> 引用原消息</label>
-      <button id="send">发送 (<span id="n">3</span>)</button>
-    </form>
-    <p id="msg"></p>
-    <div id="hbox" hidden><small>回复历史</small><ul id="hist" style="padding:0"></ul></div>
-    <p><small>链接 <span id="exp"></span> 过期，最多回复 3 次，修改不占次数。</small> <a id="tg" hidden>打开 Telegram</a></p>
+    <div class="bd">
+      <div class="bubble">
+        <div id="media" class="mtag" hidden><span id="ml"></span><a href="#" id="pv" hidden>预览</a><small id="pmsg"></small></div>
+        <div id="mbox" hidden></div>
+        <div id="text"></div>
+      </div>
+      <form id="f">
+        <textarea id="t" rows="3" placeholder="输入回复…" required maxlength="4000"></textarea>
+        <div class="bar">
+          <label><input type="checkbox" role="switch" id="quote"> 引用原消息</label>
+          <button id="send">发送<small>剩 <span id="n">3</span> 次</small></button>
+        </div>
+        <p id="msg"></p>
+      </form>
+      <div id="hbox" hidden><div class="hh">回复历史</div><ul id="hist"></ul></div>
+    </div>
+    <div class="ft">
+      <span>链接 <span id="exp"></span> 过期 · 最多回复 3 次，修改不占次数</span>
+      <a id="tg" role="button" class="outline secondary" hidden>打开 Telegram</a>
+    </div>
   </div>
-  <p id="err" hidden style="color:var(--pico-del-color)"></p>
 </article>
 <script>
 (async () => {
@@ -37,13 +91,15 @@
   const $ = id => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const fail = m => { $('loading').hidden = true; $('err').hidden = false; $('err').textContent = m; };
+  const say = (m, cls) => { $('msg').textContent = m; $('msg').className = cls || ''; };
   if (!token) return fail('链接不完整');
   const post = (p, body) => fetch(base + p, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).then(async r => [r.ok, await r.json()]);
   const [ok, info] = await post('/reply/open', {token});
   if (!ok) return fail(info.error);
   $('loading').hidden = true; $('main').hidden = false;
   $('peer').textContent = info.peer; $('sender').textContent = info.sender;
-  if (info.sender_id) $('sid').textContent = info.sender_id;
+  if (info.sender_id) { $('sid').textContent = info.sender_id; $('sid').dataset.copy = info.sender_id; }
+  if (info.sent_at) $('at').textContent = info.sent_at;
   $('text').textContent = info.text; $('exp').textContent = info.expires_at;
   if (info.deep_link) { $('tg').hidden = false; $('tg').href = info.deep_link; }
 
@@ -76,21 +132,21 @@
   // 回复历史：最新的在上面，每条可以改
   const addHist = m => {
     $('hbox').hidden = false;
-    const li = el('li'), head = el('div'), t = el('div', 't', m.text), edit = el('button', 'outline secondary', '修改');
-    head.append(el('small', '', m.at), edit);
-    li.append(head, t);
+    const li = el('li'), t = el('div', 't', m.text), h = el('div', 'h'), edit = el('a', '', '修改');
+    h.append(el('span', '', m.at), edit);
+    li.append(t, h);
     edit.onclick = () => {
-      edit.hidden = true;
-      const ta = el('textarea'), save = el('button', '', '保存'), cancel = el('button', 'outline secondary', '取消'), tip = el('small');
+      li.classList.add('editing'); t.hidden = true; h.hidden = true;
+      const ta = el('textarea'), bar = el('div', 'eb'), tip = el('small'), cancel = el('button', 'outline secondary', '取消'), save = el('button', '', '保存');
       ta.rows = 3; ta.maxLength = 4000; ta.value = m.text;
-      const bar = el('div'); bar.append(save, cancel, tip);
-      t.hidden = true; li.append(ta, bar);
-      const close = () => { ta.remove(); bar.remove(); t.hidden = false; edit.hidden = false; };
+      bar.append(tip, cancel, save);
+      li.append(ta, bar); ta.focus();
+      const close = () => { ta.remove(); bar.remove(); t.hidden = false; h.hidden = false; li.classList.remove('editing'); };
       cancel.onclick = close;
       save.onclick = async () => {
-        save.disabled = true; tip.textContent = ' 保存中…';
+        save.disabled = true; tip.textContent = '保存中…';
         const [ok, r] = await post('/reply/edit', {token, id: m.id, text: ta.value});
-        if (!ok) { tip.textContent = ' ' + r.error; save.disabled = false; return; }
+        if (!ok) { tip.textContent = r.error; save.disabled = false; return; }
         m.text = r.text; t.textContent = r.text; close();
       };
     };
@@ -98,14 +154,14 @@
   };
   (info.history || []).forEach(addHist);
 
-  const setN = n => { $('n').textContent = n; if (n <= 0) { $('send').disabled = true; $('t').disabled = true; } };
+  const setN = n => { $('n').textContent = n; if (n <= 0) { $('send').disabled = true; $('t').disabled = true; $('t').placeholder = '回复次数已用完'; } };
   setN(info.remaining);
   $('f').onsubmit = async e => {
     e.preventDefault();
-    $('send').disabled = true; $('msg').textContent = '发送中…';
+    $('send').disabled = true; say('发送中…');
     const [ok, r] = await post('/reply/send', {token, text: $('t').value, quote: $('quote').checked});
-    if (!ok) { $('msg').textContent = r.error; $('send').disabled = $('n').textContent <= 0; return; }
-    $('t').value = ''; $('msg').textContent = '已发送';
+    if (!ok) { say(r.error, 'err'); $('send').disabled = $('n').textContent <= 0; return; }
+    $('t').value = ''; say('已发送', 'ok');
     if (r.sent && r.sent.id) addHist(r.sent);
     setN(r.remaining); if (r.remaining > 0) $('send').disabled = false;
   };

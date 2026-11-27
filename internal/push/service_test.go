@@ -246,7 +246,7 @@ func TestMediaPush(t *testing.T) {
 	}
 	_, tok, _ := strings.Cut(got.Actions[0].URL, "#")
 	p, err := reply.Parse("sec", tok)
-	if err != nil || p.Media != "[图片 1280×960 12K]" || p.Preview != "image" || p.Text != "配文" {
+	if err != nil || p.Media != "[图片 1280×960 12K]" || p.Preview != "image" || p.Text != "配文" || p.At == 0 {
 		t.Fatalf("token = %+v %v", p, err)
 	}
 

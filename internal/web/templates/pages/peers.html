@@ -1,26 +1,67 @@
 {{define "content"}}
+<style>
+select.lv{margin:0;padding:.2rem 1.8rem .2rem .5rem;font-size:.85rem;width:auto;min-width:7.5em;height:auto}
+.cfg{padding:.7rem .9rem;margin-bottom:1rem}
+.cfg .row{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1.4rem}
+.cfg .row+.row{margin-top:.55rem;padding-top:.55rem;border-top:1px dashed var(--pico-muted-border-color)}
+.cfg form{margin:0;display:contents}
+.cfg label{margin:0;display:flex;align-items:center;gap:.4rem;white-space:nowrap;font-size:.9rem}
+.cfg select{margin:0;width:auto;padding:.2rem 1.8rem .2rem .55rem;font-size:.88rem;height:auto}
+.cfg select.acc{max-width:260px}
+.cfg small{display:block;margin-top:.45rem;font-size:.78rem;line-height:1.45}
+</style>
 <h3>通知设置</h3>
 <div class="tabs"><a href="{{url "/peers"}}" class="on">TG 对话</a><a href="{{url "/topics"}}">对外接口</a></div>
 <p><small>打开"监控转发"的对话，新消息会转发到账号配置的渠道。"永不监听"优先级最高，打开后该对话的消息一律忽略。新对话收到消息后自动出现在列表里。</small></p>
-<select onchange="location='{{url "/peers"}}'+(this.value?'?account='+this.value:'')" style="max-width:360px">
-  <option value="">全部账号</option>
-  {{range .Accounts}}<option value="{{.ID}}" {{if eq .ID $.Selected}}selected{{end}}>{{.TgUserID}} {{.FirstName}}</option>{{end}}
-</select>
-{{with .Current}}
-<form method="post" action="{{url "/accounts/"}}{{.ID}}/monitor-all" style="margin:.2rem 0 1.2rem">
-  <label style="margin:0"><input type="checkbox" role="switch" {{if .MonitorAll}}checked{{end}} onchange="this.form.submit()"> 监听所有人</label>
-  <small style="display:block;margin-top:.3rem">开启后所有对话都转发，不看"监控转发"开关；"永不监听"的仍然忽略。</small>
-</form>
-{{end}}
+<article class="cfg">
+  <div class="row">
+    <label>账号
+      <select class="acc" onchange="location='{{url "/peers"}}'+(this.value?'?account='+this.value:'')">
+        <option value="">全部账号</option>
+        {{range .Accounts}}<option value="{{.ID}}" {{if eq .ID $.Selected}}selected{{end}}>{{.TgUserID}} {{.FirstName}}</option>{{end}}
+      </select>
+    </label>
+    {{with .Current}}
+    <form method="post" action="{{url "/accounts/"}}{{.ID}}/monitor-all">
+      <label><input type="checkbox" role="switch" {{if .MonitorAll}}checked{{end}} onchange="this.form.submit()"> 监听所有人</label>
+    </form>
+    {{end}}
+  </div>
+  {{with .Current}}
+  <div class="row">
+    <form method="post" action="{{url "/accounts/"}}{{.ID}}/notify">
+      <label>默认通知等级
+        <select name="priority" onchange="this.form.submit()">
+          {{range $.Levels}}<option value="{{.V}}" {{if eq .V $.Current.Priority}}selected{{end}}>{{.L}}</option>{{end}}
+        </select>
+      </label>
+      <label>连发
+        <select name="repeat_from" onchange="this.form.submit()">
+          {{range $.Levels}}<option value="{{.V}}" {{if eq .V $.Current.RepeatFrom}}selected{{end}}>{{.L}}{{if ne .V 5}} 及以上{{end}}</option>{{end}}
+        </select>
+        发
+        <select name="repeat_n" onchange="this.form.submit()">
+          {{range $.Repeats}}<option value="{{.}}" {{if eq . $.Current.RepeatN}}selected{{end}}>{{if eq . 1}}1 遍（不连发）{{else}}{{.}} 遍{{end}}</option>{{end}}
+        </select>
+      </label>
+    </form>
+  </div>
+  <small>监听所有人：不看"监控转发"开关全部转发，"永不监听"的仍忽略。对话等级选"跟随默认"时用默认通知等级；高 / 紧急响铃弹出，最低 / 低静默收进通知栏。连发每遍隔 3 秒（ntfy / Bark 都会连发，等级只对 ntfy 生效）。</small>
+  {{end}}
+</article>
 {{if .Peers}}
 <table class="r">
-<thead><tr><th>对话</th><th>类型</th><th>监控转发</th><th>永不监听</th></tr></thead>
+<thead><tr><th>对话</th><th>类型</th><th>监控转发</th><th>永不监听</th><th>通知等级</th></tr></thead>
 <tbody>{{range .Peers}}
 <tr><td data-label="对话">{{name .Username .Title 0}}</td><td data-label="类型">{{.Kind}}</td>
 <td data-label="监控"><input type="checkbox" role="switch" {{if .Monitored}}checked{{end}} {{if and $.Current $.Current.MonitorAll}}disabled title="已开启监听所有人"{{end}}
   hx-post="{{url "/peers/"}}{{.ID}}/toggle" hx-swap="none"></td>
 <td data-label="永不监听"><input type="checkbox" role="switch" {{if .Muted}}checked{{end}}
-  hx-post="{{url "/peers/"}}{{.ID}}/mute" hx-swap="none"></td></tr>
+  hx-post="{{url "/peers/"}}{{.ID}}/mute" hx-swap="none"></td>
+<td data-label="通知等级"><select name="priority" class="lv" hx-post="{{url "/peers/"}}{{.ID}}/priority" hx-swap="none">
+  <option value="0">跟随默认{{with $.Current}}（{{level .Priority}}）{{end}}</option>
+  {{$p := .Priority}}{{range $.Levels}}<option value="{{.V}}" {{if eq .V $p}}selected{{end}}>{{.L}}</option>{{end}}
+</select></td></tr>
 {{end}}</tbody>
 </table>
 <p>{{if .Paged}}<a href="{{url "/peers"}}{{if .Selected}}?account={{.Selected}}{{end}}">第一页</a>{{end}} {{if .Next}}<a href="{{url "/peers"}}?after={{.Next}}{{if .Selected}}&account={{.Selected}}{{end}}">下一页 →</a>{{end}}</p>

@@ -27,11 +27,25 @@ const (
 	batch         = 50
 	workers       = 8
 	pushBodyBytes = 3600 // ntfy 单条 4096 字节上限，留余量
+
+	maxRepeat = 5 // 连发最多几遍
 )
+
+var urgentGap = 3 * time.Second // 连发每遍间隔，太近手机会合并成一次提示；测试里调短
+
+// repeatTimes 按账号的连发设置算一共发几遍：等级达到 from 的发 n 遍，其余 1 遍。
+func repeatTimes(prio, from, n int) int {
+	if from >= 1 && prio >= from && n > 1 {
+		return min(n, maxRepeat)
+	}
+	return 1
+}
 
 // body 一条消息在内存里的内容：正文、媒体说明、可预览类型；接口消息另带 api。
 type body struct {
 	text, media, preview string
+	prio                 int // 通知等级 1-5，0 用 ntfy 默认
+	times                int // 一共发几遍（连发），0 / 1 只发一遍
 	api                  *apiExtra
 }
 
@@ -149,8 +163,10 @@ func (s *Service) HandleMessage(in tgclient.Incoming) {
 	var peer struct {
 		ID                           uint
 		Monitored, Muted, MonitorAll bool
+		Priority, AccPriority        int
+		RepeatFrom, RepeatN          int
 	}
-	if err := s.db.Raw(`SELECT p.id, p.monitored, p.muted, a.monitor_all FROM tg_peers p JOIN tg_accounts a ON a.id = p.account_id
+	if err := s.db.Raw(`SELECT p.id, p.monitored, p.muted, a.monitor_all, p.priority, a.priority AS acc_priority, a.repeat_from, a.repeat_n FROM tg_peers p JOIN tg_accounts a ON a.id = p.account_id
 		WHERE p.account_id = ? AND p.kind = ? AND p.peer_id = ? LIMIT 1`, in.AccountID, in.PeerKind, in.PeerID).Scan(&peer).Error; err != nil {
 		slog.Error("lookup peer", "account", in.AccountID, "err", err) // 查库失败不等于未监控
 		return
@@ -162,7 +178,12 @@ func (s *Service) HandleMessage(in tgclient.Incoming) {
 	var chs []db.Channel
 	s.db.Where("account_id = ? AND enabled = ?", in.AccountID, true).Find(&chs)
 	msg := db.Message{AccountID: in.AccountID, PeerID: peer.ID, TgMsgID: in.MsgID, Sender: in.Sender, SenderUser: in.SenderUser, SenderID: in.SenderID, SentAt: in.SentAt, ReceivedAt: time.Now()}
-	if _, err := s.enqueue(msg, chs, body{text: in.Text, media: in.Media, preview: in.Preview}); err != nil {
+	prio := peer.Priority // 对话自己设了就用它，否则跟随账号默认
+	if prio == 0 {
+		prio = peer.AccPriority
+	}
+	b := body{text: in.Text, media: in.Media, preview: in.Preview, prio: prio, times: repeatTimes(prio, peer.RepeatFrom, peer.RepeatN)}
+	if _, err := s.enqueue(msg, chs, b); err != nil {
 		slog.Error("save message", "err", err)
 		return
 	}
@@ -344,23 +365,28 @@ func (s *Service) deliver(ctx context.Context, l db.PushLog) bool {
 		if msg.Sender != "" && msg.Sender != peer.Title {
 			body = msg.Sender + ": " + body
 		}
+		if b.prio >= 1 && b.prio <= 5 {
+			extra = map[string]any{"priority": b.prio}
+		}
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	var err error
-	switch ch.Kind {
-	case "bark":
-		err = bark.NewWithServers(ch.Target, s.serverFor(ch)).Send(ctx, title, fitBytes(body, pushBodyBytes))
-	case "ntfy":
-		var actions []action
-		if b.api == nil {
-			actions = s.replyActions(msg, peer, b)
-		}
-		err = s.ntfyOrAnon().publish(ctx, s.serverFor(ch), ch.Target, title, fitBytes(body, pushBodyBytes), actions, extra)
-	default:
-		err = fmt.Errorf("未知渠道类型 %s", ch.Kind)
+	var actions []action
+	if ch.Kind == "ntfy" && b.api == nil {
+		actions = s.replyActions(msg, peer, b)
 	}
+	server := s.serverFor(ch)
+	send := func(ctx context.Context) error {
+		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		switch ch.Kind {
+		case "bark":
+			return bark.NewWithServers(ch.Target, server).Send(ctx, title, fitBytes(body, pushBodyBytes))
+		case "ntfy":
+			return s.ntfyOrAnon().publish(ctx, server, ch.Target, title, fitBytes(body, pushBodyBytes), actions, extra)
+		}
+		return fmt.Errorf("未知渠道类型 %s", ch.Kind)
+	}
+	err := send(ctx)
 
 	now := time.Now()
 	if err == nil {
@@ -369,6 +395,20 @@ func (s *Service) deliver(ctx context.Context, l db.PushLog) bool {
 		if err := s.setLog(&l, map[string]any{"status": "sent", "sent_at": now, "error": "", "attempts": l.Attempts + 1}); err != nil {
 			slog.Error("mark sent", "log", l.ID, "err", err)
 			return false
+		}
+		// 连发：已记为送达后再补发，手机连响几次；补发失败不重试，也不影响送达状态
+		if b.times > 1 {
+			for i := 0; i < b.times-1; i++ {
+				select {
+				case <-ctx.Done():
+					return true
+				case <-time.After(urgentGap):
+				}
+				if err := send(ctx); err != nil {
+					slog.Warn("urgent repeat", "log", l.ID, "err", err)
+					break
+				}
+			}
 		}
 		return true
 	}
@@ -449,7 +489,7 @@ func (s *Service) replyActions(msg db.Message, peer db.TgPeer, b body) []action 
 	if s.cfg.PublicURL != "" {
 		tok, err := reply.Sign(s.cfg.SessionSecret, reply.Payload{
 			Account: msg.AccountID, PeerKind: peer.Kind, PeerID: peer.PeerID, AccessHash: peer.AccessHash, MsgID: msg.TgMsgID,
-			Exp: time.Now().Add(reply.TTL).Unix(), PeerTitle: peer.Title,
+			Exp: time.Now().Add(reply.TTL).Unix(), At: msg.SentAt.Unix(), PeerTitle: peer.Title,
 			Sender: msg.Sender, SenderUser: msg.SenderUser, SenderID: msg.SenderID, Text: b.text, Media: b.media, Preview: b.preview,
 		})
 		if err == nil {

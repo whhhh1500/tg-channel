@@ -84,7 +84,7 @@ Authorization: Bearer &lt;key&gt;</code></pre>
 <tbody>
 <tr><td><code>message</code></td><td>是</td><td>正文，最多 4000 字；超过推送服务单条上限的部分会截断</td></tr>
 <tr><td><code>title</code></td><td>否</td><td>标题，最多 100 字。通知显示为「图标 [主题名] 标题」，不传只显示「图标 [主题名]」</td></tr>
-<tr><td><code>priority</code></td><td>否</td><td>1–5，默认 3。4、5 会响铃 / 弹出（仅 ntfy）</td></tr>
+<tr><td><code>priority</code></td><td>否</td><td>通知等级 1–5（最低 / 低 / 普通 / 高 / 紧急），不传用推送账号的默认通知等级。4、5 响铃弹出（仅 ntfy）；达到账号设的连发等级会连发几遍</td></tr>
 <tr><td><code>click</code></td><td>否</td><td>点通知打开的网址，只能是 http / https（仅 ntfy）</td></tr>
 <tr><td><code>tags</code></td><td>否</td><td>附加标签，最多 3 个，每个 1–20 字。主题标识总会作为第一个标签（仅 ntfy）</td></tr>
 </tbody>

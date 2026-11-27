@@ -38,6 +38,7 @@ func main() {
 		os.Exit(1)
 	}
 	p.Exp = time.Now().Add(*ttl).Unix()
+	p.At = time.Now().Unix() // 模拟刚收到的消息
 	tok, err := reply.Sign(cfg.SessionSecret, p)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

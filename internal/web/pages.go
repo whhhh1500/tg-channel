@@ -50,7 +50,7 @@ func (s *Server) peersPage(c *gin.Context) {
 		last := peers[len(peers)-1]
 		next = fmt.Sprintf("%d-%d", last.AccountID, last.ID)
 	}
-	s.render(c, "peers.html", gin.H{"Peers": peers, "Next": next, "Paged": c.Query("after") != "", "Accounts": accounts, "Selected": uint(selected), "Current": current})
+	s.render(c, "peers.html", gin.H{"Levels": levels, "Repeats": []int{1, 2, 3, 4, 5}, "Peers": peers, "Next": next, "Paged": c.Query("after") != "", "Accounts": accounts, "Selected": uint(selected), "Current": current})
 }
 
 // togglePeer 切换对话的 monitored（监控转发）或 muted（永不监听），列名只来自路由，不来自请求。
@@ -63,6 +63,60 @@ func (s *Server) togglePeer(col string) gin.HandlerFunc {
 		}
 		c.Status(http.StatusNoContent)
 	}
+}
+
+// levels 通知等级，对应 ntfy priority 1-5。
+var levels = []struct {
+	V int
+	L string
+}{{1, "最低"}, {2, "低"}, {3, "普通"}, {4, "高"}, {5, "紧急"}}
+
+// levelName 等级的中文名，不在 1-5 返回空。
+func levelName(v int) string {
+	for _, l := range levels {
+		if l.V == v {
+			return l.L
+		}
+	}
+	return ""
+}
+
+// setPeerPriority 对话的通知等级：0 跟随账号默认，1-5 固定。下拉框改动即保存（htmx）。
+func (s *Server) setPeerPriority(c *gin.Context) {
+	p, err := strconv.Atoi(c.PostForm("priority"))
+	if err != nil || p < 0 || p > 5 {
+		c.String(http.StatusBadRequest, "等级只能是 0-5")
+		return
+	}
+	if s.db.Exec(`UPDATE tg_peers SET priority = ? WHERE id = ? AND account_id IN (SELECT id FROM tg_accounts WHERE user_id = ?)`,
+		p, c.Param("id"), s.currentUser(c).ID).RowsAffected == 0 {
+		c.String(http.StatusNotFound, "404")
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// setAccountNotify 账号的默认通知等级和连发设置，回到该账号的通知设置页（行里"跟随默认"的文字要跟着变）。
+// 只改表单里带了且合法的字段。
+func (s *Server) setAccountNotify(c *gin.Context) {
+	acc := s.ownedAccount(c, c.Param("id"))
+	if acc == nil {
+		return
+	}
+	upd := map[string]any{}
+	if p, err := strconv.Atoi(c.PostForm("priority")); err == nil && levelName(p) != "" {
+		upd["priority"] = p
+	}
+	if p, err := strconv.Atoi(c.PostForm("repeat_from")); err == nil && levelName(p) != "" {
+		upd["repeat_from"] = p
+	}
+	if n, err := strconv.Atoi(c.PostForm("repeat_n")); err == nil && n >= 1 && n <= 5 {
+		upd["repeat_n"] = n
+	}
+	if len(upd) > 0 {
+		s.db.Model(acc).Updates(upd)
+	}
+	s.redirect(c, fmt.Sprintf("/peers?account=%d", acc.ID))
 }
 
 // toggleMonitorAll 切换账号的"监听所有人"，回到该账号的通知设置页。

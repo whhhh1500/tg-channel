@@ -133,6 +133,7 @@ func (s *Server) replyPage(c *gin.Context) {
 type replyInfo struct {
 	Peer      string    `json:"peer"`
 	Sender    string    `json:"sender"`
+	SentAt    string    `json:"sent_at,omitempty"`
 	SenderID  int64     `json:"sender_id"`
 	Text      string    `json:"text"`
 	Media     string    `json:"media,omitempty"`
@@ -167,8 +168,13 @@ func (s *Server) replyOpen(c *gin.Context) {
 		return
 	}
 	n, history := s.uses.get(reply.Key(in.Token))
+	sentAt := ""
+	if p.At > 0 {
+		sentAt = fmtSec(time.Unix(p.At, 0))
+	}
 	c.JSON(http.StatusOK, replyInfo{
-		Peer: displayName("", p.PeerTitle), Sender: displayName(p.SenderUser, p.Sender), SenderID: p.SenderID, Text: p.Text, Media: p.Media, Preview: p.Preview,
+		SentAt: sentAt,
+		Peer:   displayName("", p.PeerTitle), Sender: displayName(p.SenderUser, p.Sender), SenderID: p.SenderID, Text: p.Text, Media: p.Media, Preview: p.Preview,
 		Remaining: reply.MaxUses - n,
 		ExpiresAt: time.Unix(p.Exp, 0).Local().Format("01-02 15:04"),
 		DeepLink:  reply.DeepLink(p.PeerKind, p.PeerID, p.MsgID),

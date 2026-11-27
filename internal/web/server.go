@@ -92,6 +92,8 @@ func New(cfg *config.Config, g *gorm.DB, tg *tgclient.Manager, p *push.Service) 
 	auth.POST("/peers/:id/toggle", s.togglePeer("monitored"))
 	auth.POST("/peers/:id/mute", s.togglePeer("muted"))
 	auth.POST("/accounts/:id/monitor-all", s.toggleMonitorAll)
+	auth.POST("/peers/:id/priority", s.setPeerPriority)
+	auth.POST("/accounts/:id/notify", s.setAccountNotify)
 	auth.GET("/topics", s.topicsPage)
 	auth.POST("/topics", s.createTopic)
 	auth.POST("/topics/:id", s.updateTopic)
@@ -214,6 +216,7 @@ func loadTemplates(url func(string) string, ver string) render.HTMLRender {
 		"ts":    fmtTime,
 		"tsec":  fmtSec,
 		"rel":   relTime,
+		"level": levelName,
 	}
 	r := pageRender{pages: map[string]entry{}}
 	base := template.Must(template.New("").Funcs(funcs).ParseFS(assets, "templates/layout.html", "templates/partials/*.html"))

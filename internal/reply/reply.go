@@ -35,6 +35,7 @@ type Payload struct {
 	AccessHash int64  `json:"h"`
 	MsgID      int    `json:"m"`
 	Exp        int64  `json:"e"`
+	At         int64  `json:"s,omitempty"` // 消息发送时间（unix 秒），旧链接没有
 	PeerTitle  string `json:"c"`
 	Sender     string `json:"f"`
 	SenderUser string `json:"u,omitempty"`

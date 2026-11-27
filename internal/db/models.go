@@ -22,6 +22,9 @@ type TgAccount struct {
 	Status     string `gorm:"size:16"` // online / offline / error
 	LastError  string
 	MonitorAll bool `gorm:"not null;default:false"` // 监听所有对话（永不监听的除外）
+	Priority   int  `gorm:"not null;default:3"`     // 默认通知等级 1-5（ntfy priority），3 普通
+	RepeatFrom int  `gorm:"not null;default:5"`     // 等级达到这个值的消息连发
+	RepeatN    int  `gorm:"not null;default:3"`     // 连发一共几遍，1 表示不连发
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
@@ -37,6 +40,7 @@ type TgPeer struct {
 	Title      string
 	Monitored  bool
 	Muted      bool `gorm:"not null;default:false"` // 永不监听，优先于 Monitored 和账号的 MonitorAll
+	Priority   int  `gorm:"not null;default:0"`     // 通知等级 1-5；0 跟随账号默认
 	UpdatedAt  time.Time
 }
 
