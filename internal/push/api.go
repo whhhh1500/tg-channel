@@ -48,14 +48,14 @@ func (s *Service) HandleAPI(m APIMessage) (uint, error) {
 		return 0, ErrBusy
 	}
 	var acc db.TgAccount
-	s.db.Select("priority", "repeat_from", "repeat_n").Where("id = ?", m.AccountID).Limit(1).Find(&acc)
+	s.db.Select("priority", "repeats").Where("id = ?", m.AccountID).Limit(1).Find(&acc)
 	prio := m.Priority // 调用方没给就用账号默认等级
 	if prio == 0 {
 		prio = acc.Priority
 	}
 	now := time.Now()
 	msg := db.Message{AccountID: m.AccountID, TopicID: m.TopicID, Sender: m.From, SentAt: now, ReceivedAt: now}
-	id, err := s.enqueue(msg, chs, body{text: m.Text, times: repeatTimes(prio, acc.RepeatFrom, acc.RepeatN),
+	id, err := s.enqueue(msg, chs, body{text: m.Text, times: repeatTimes(prio, acc.Repeats),
 		api: &apiExtra{title: m.Title, click: m.Click, priority: prio, tags: m.Tags}})
 	if err != nil {
 		return 0, err

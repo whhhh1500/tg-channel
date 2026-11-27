@@ -3,6 +3,7 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -50,7 +51,18 @@ func (s *Server) peersPage(c *gin.Context) {
 		last := peers[len(peers)-1]
 		next = fmt.Sprintf("%d-%d", last.AccountID, last.ID)
 	}
-	s.render(c, "peers.html", gin.H{"Levels": levels, "Repeats": []int{1, 2, 3, 4, 5}, "Peers": peers, "Next": next, "Paged": c.Query("after") != "", "Accounts": accounts, "Selected": uint(selected), "Current": current})
+	var strategy []levelRepeat
+	show := 5 // 发送策略下拉默认显示最高的那个连发等级，都不连发就显示紧急
+	if current != nil {
+		for _, l := range levels {
+			n := repeatOf(current.Repeats, l.V)
+			strategy = append(strategy, levelRepeat{l.V, l.L, n})
+			if n > 1 {
+				show = l.V
+			}
+		}
+	}
+	s.render(c, "peers.html", gin.H{"Levels": levels, "Strategy": strategy, "Show": show, "Repeats": []int{1, 2, 3, 4, 5}, "Peers": peers, "Next": next, "Paged": c.Query("after") != "", "Accounts": accounts, "Selected": uint(selected), "Current": current})
 }
 
 // togglePeer 切换对话的 monitored（监控转发）或 muted（永不监听），列名只来自路由，不来自请求。
@@ -70,6 +82,22 @@ var levels = []struct {
 	V int
 	L string
 }{{1, "最低"}, {2, "低"}, {3, "普通"}, {4, "高"}, {5, "紧急"}}
+
+type levelRepeat struct {
+	V int
+	L string
+	N int
+}
+
+var repeatsRe = regexp.MustCompile(`^[1-5]{5}$`)
+
+// repeatOf 发送策略里等级 v 发几遍，不合法按 1。
+func repeatOf(repeats string, v int) int {
+	if repeatsRe.MatchString(repeats) && v >= 1 && v <= 5 {
+		return int(repeats[v-1] - '0')
+	}
+	return 1
+}
 
 // levelName 等级的中文名，不在 1-5 返回空。
 func levelName(v int) string {
@@ -107,11 +135,8 @@ func (s *Server) setAccountNotify(c *gin.Context) {
 	if p, err := strconv.Atoi(c.PostForm("priority")); err == nil && levelName(p) != "" {
 		upd["priority"] = p
 	}
-	if p, err := strconv.Atoi(c.PostForm("repeat_from")); err == nil && levelName(p) != "" {
-		upd["repeat_from"] = p
-	}
-	if n, err := strconv.Atoi(c.PostForm("repeat_n")); err == nil && n >= 1 && n <= 5 {
-		upd["repeat_n"] = n
+	if r := c.PostForm("repeats"); repeatsRe.MatchString(r) {
+		upd["repeats"] = r
 	}
 	if len(upd) > 0 {
 		s.db.Model(acc).Updates(upd)
@@ -132,13 +157,14 @@ func (s *Server) testStrategy(c *gin.Context) {
 	}
 	// 用下拉框里当前选的值（可能还没保存），不合法的沿用已保存的
 	test := *acc
-	if p, err := strconv.Atoi(c.PostForm("repeat_from")); err == nil && levelName(p) != "" {
-		test.RepeatFrom = p
+	if r := c.PostForm("repeats"); repeatsRe.MatchString(r) {
+		test.Repeats = r
 	}
-	if n, err := strconv.Atoi(c.PostForm("repeat_n")); err == nil && n >= 1 && n <= 5 {
-		test.RepeatN = n
+	lv, _ := strconv.Atoi(c.PostForm("level"))
+	if levelName(lv) == "" {
+		lv = 5
 	}
-	n, err := s.push.TestStrategy(c.Request.Context(), test, levelName(test.RepeatFrom))
+	n, err := s.push.TestStrategy(c.Request.Context(), test, lv, levelName(lv))
 	switch {
 	case n == 0 && err != nil:
 		c.String(http.StatusOK, "发送失败："+err.Error())

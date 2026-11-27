@@ -34,8 +34,18 @@ func OpenFile(path string) (*gorm.DB, error) {
 	// SQLite 只有一个写者，单连接最省事也不会 "database is locked"。
 	sqlDB.SetMaxOpenConns(1)
 
+	// 发送策略从"一个等级 + 遍数"（repeat_from / repeat_n）改成每个等级各自的遍数，升级时按旧设置换算
+	hadRepeats := g.Migrator().HasColumn(&TgAccount{}, "repeats")
 	if err := g.AutoMigrate(&User{}, &TgAccount{}, &TgPeer{}, &Channel{}, &Message{}, &PushLog{}, &Provider{}, &TgState{}, &TgChannelState{}, &ApiTopic{}); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	if !hadRepeats && g.Migrator().HasColumn(&TgAccount{}, "repeat_from") {
+		digit := func(i int) string {
+			return fmt.Sprintf("CASE WHEN repeat_from = %d AND repeat_n BETWEEN 1 AND 5 THEN CAST(repeat_n AS TEXT) ELSE '1' END", i)
+		}
+		if err := g.Exec("UPDATE tg_accounts SET repeats = " + digit(1) + " || " + digit(2) + " || " + digit(3) + " || " + digit(4) + " || " + digit(5)).Error; err != nil {
+			return nil, fmt.Errorf("迁移发送策略: %w", err)
+		}
 	}
 	// 旧库升级：新加的列对已有行是 NULL，回填成 0
 	g.Exec("UPDATE users SET session_ver = 0 WHERE session_ver IS NULL")

@@ -33,10 +33,13 @@ const (
 
 var urgentGap = 3 * time.Second // 连发每遍间隔，太近手机会合并成一次提示；测试里调短
 
-// repeatTimes 按账号的发送策略算一共发几遍：等级正好是 from 的发 n 遍，其余 1 遍。
-func repeatTimes(prio, from, n int) int {
-	if from >= 1 && prio == from && n > 1 {
-		return min(n, maxRepeat)
+// repeatTimes 按账号的发送策略算一共发几遍：repeats 第 prio 位是该等级的遍数，缺省或不合法按 1 遍。
+func repeatTimes(prio int, repeats string) int {
+	if prio < 1 || prio > len(repeats) {
+		return 1
+	}
+	if n := int(repeats[prio-1] - '0'); n > 1 && n <= maxRepeat {
+		return n
 	}
 	return 1
 }
@@ -164,9 +167,9 @@ func (s *Service) HandleMessage(in tgclient.Incoming) {
 		ID                           uint
 		Monitored, Muted, MonitorAll bool
 		Priority, AccPriority        int
-		RepeatFrom, RepeatN          int
+		Repeats                      string
 	}
-	if err := s.db.Raw(`SELECT p.id, p.monitored, p.muted, a.monitor_all, p.priority, a.priority AS acc_priority, a.repeat_from, a.repeat_n FROM tg_peers p JOIN tg_accounts a ON a.id = p.account_id
+	if err := s.db.Raw(`SELECT p.id, p.monitored, p.muted, a.monitor_all, p.priority, a.priority AS acc_priority, a.repeats FROM tg_peers p JOIN tg_accounts a ON a.id = p.account_id
 		WHERE p.account_id = ? AND p.kind = ? AND p.peer_id = ? LIMIT 1`, in.AccountID, in.PeerKind, in.PeerID).Scan(&peer).Error; err != nil {
 		slog.Error("lookup peer", "account", in.AccountID, "err", err) // 查库失败不等于未监控
 		return
@@ -182,7 +185,7 @@ func (s *Service) HandleMessage(in tgclient.Incoming) {
 	if prio == 0 {
 		prio = peer.AccPriority
 	}
-	b := body{text: in.Text, media: in.Media, preview: in.Preview, prio: prio, times: repeatTimes(prio, peer.RepeatFrom, peer.RepeatN)}
+	b := body{text: in.Text, media: in.Media, preview: in.Preview, prio: prio, times: repeatTimes(prio, peer.Repeats)}
 	if _, err := s.enqueue(msg, chs, b); err != nil {
 		slog.Error("save message", "err", err)
 		return

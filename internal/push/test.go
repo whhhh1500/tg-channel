@@ -10,10 +10,10 @@ import (
 	"tgchannel/internal/db"
 )
 
-// TestStrategy 按账号的发送策略发一条测试通知：等级取策略里选的等级，遍数按连发设置。
+// TestStrategy 按发送策略发一条等级为 prio 的测试通知，遍数取 acc.Repeats 里该等级的设置。
 // 不进队列、不记消息记录。第一遍同步发，返回发成功的渠道数和各渠道错误，好让页面马上提示；
 // 补发的几遍在后台按 urgentGap 间隔发完。level 是等级名，只用于通知正文。
-func (s *Service) TestStrategy(ctx context.Context, acc db.TgAccount, level string) (int, error) {
+func (s *Service) TestStrategy(ctx context.Context, acc db.TgAccount, prio int, level string) (int, error) {
 	var chs []db.Channel
 	if err := s.db.Where("account_id = ? AND enabled = ?", acc.ID, true).Find(&chs).Error; err != nil {
 		return 0, err
@@ -21,7 +21,7 @@ func (s *Service) TestStrategy(ctx context.Context, acc db.TgAccount, level stri
 	if len(chs) == 0 {
 		return 0, ErrNoChannel
 	}
-	prio, times := acc.RepeatFrom, repeatTimes(acc.RepeatFrom, acc.RepeatFrom, acc.RepeatN)
+	times := repeatTimes(prio, acc.Repeats)
 	title := "🔔 发送策略测试"
 	body := fmt.Sprintf("等级「%s」，发 %d 遍，每遍隔 %d 秒。收到 %d 条说明设置生效。", level, times, int(urgentGap/time.Second), times)
 	if times == 1 {

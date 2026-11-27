@@ -144,8 +144,8 @@ func TestPeerPriority(t *testing.T) {
 	if n := api(5); n != 3 {
 		t.Fatalf("接口紧急消息应发三遍: %d", n)
 	}
-	// 改成"高发 2 遍"：只有高发 2 遍，紧急、普通都 1 遍，不传等级用账号默认（2 → 1 遍）
-	g.Model(&acc).Updates(map[string]any{"repeat_from": 4, "repeat_n": 2})
+	// 改成"高发 2 遍、紧急 1 遍"：只有高发 2 遍，紧急、普通都 1 遍，不传等级用账号默认（2 → 1 遍）
+	g.Model(&acc).Update("repeats", "11121")
 	if n := api(4); n != 2 {
 		t.Fatalf("高应发两遍: %d", n)
 	}
@@ -163,16 +163,21 @@ func TestPeerPriority(t *testing.T) {
 		t.Fatalf("TG 消息也按新设置连发: %d", hits)
 	}
 	// 1 遍 = 不连发
-	g.Model(&acc).Update("repeat_n", 1)
+	g.Model(&acc).Update("repeats", "11111")
 	if p := send(8); p != float64(4) || hits != 1 {
 		t.Fatalf("设成 1 遍应不连发: %d", hits)
 	}
 }
 
 func TestRepeatTimes(t *testing.T) {
-	for _, c := range [][4]int{{5, 5, 3, 3}, {4, 5, 3, 1}, {5, 4, 2, 1}, {4, 4, 2, 2}, {3, 0, 3, 1}, {5, 5, 1, 1}, {5, 5, 9, maxRepeat}} {
-		if got := repeatTimes(c[0], c[1], c[2]); got != c[3] {
-			t.Errorf("repeatTimes%v = %d", c[:3], got)
+	cases := []struct {
+		prio    int
+		repeats string
+		want    int
+	}{{5, "11113", 3}, {4, "11113", 1}, {4, "11121", 2}, {5, "11121", 1}, {1, "31111", 3}, {0, "11113", 1}, {6, "11113", 1}, {5, "", 1}, {5, "1111", 1}, {5, "11119", 1}, {5, "1111x", 1}}
+	for _, c := range cases {
+		if got := repeatTimes(c.prio, c.repeats); got != c.want {
+			t.Errorf("repeatTimes(%d, %q) = %d, want %d", c.prio, c.repeats, got, c.want)
 		}
 	}
 }

@@ -43,7 +43,7 @@ func TestTestStrategy(t *testing.T) {
 	s := New(&config.Config{NtfyURL: srv.URL}, g)
 	g.First(&acc, acc.ID) // 取库里的默认值：紧急发 3 遍
 
-	if _, err := s.TestStrategy(context.Background(), acc, "紧急"); !errors.Is(err, ErrNoChannel) {
+	if _, err := s.TestStrategy(context.Background(), acc, 5, "紧急"); !errors.Is(err, ErrNoChannel) {
 		t.Fatalf("没有渠道应报 ErrNoChannel: %v", err)
 	}
 	g.Create(&db.Channel{AccountID: acc.ID, Kind: "ntfy", Target: "t", Enabled: true})
@@ -64,7 +64,7 @@ func TestTestStrategy(t *testing.T) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
-	n, err := s.TestStrategy(context.Background(), acc, "紧急")
+	n, err := s.TestStrategy(context.Background(), acc, 5, "紧急")
 	if n != 1 || err != nil {
 		t.Fatalf("应发成功 1 个渠道: %d %v", n, err)
 	}
@@ -81,8 +81,7 @@ func TestTestStrategy(t *testing.T) {
 		t.Fatalf("测试不进消息记录: %d", cnt)
 	}
 
-	acc.RepeatFrom, acc.RepeatN = 4, 1
-	s.TestStrategy(context.Background(), acc, "高")
+	s.TestStrategy(context.Background(), acc, 4, "高") // 默认策略里高只发 1 遍
 	if got := wait(2); len(got) != 1 || got[0]["priority"] != float64(4) || !strings.Contains(got[0]["message"].(string), "不连发") {
 		t.Fatalf("不连发只发 1 遍: %v", got)
 	}
@@ -90,8 +89,7 @@ func TestTestStrategy(t *testing.T) {
 	mu.Lock()
 	fail = true
 	mu.Unlock()
-	acc.RepeatN = 3
-	if n, err := s.TestStrategy(context.Background(), acc, "高"); n != 0 || err == nil || !strings.HasPrefix(err.Error(), "ntfy：") {
+	if n, err := s.TestStrategy(context.Background(), acc, 5, "紧急"); n != 0 || err == nil || !strings.HasPrefix(err.Error(), "ntfy：") {
 		t.Fatalf("渠道失败应返回错误且不补发: %d %v", n, err)
 	}
 }
