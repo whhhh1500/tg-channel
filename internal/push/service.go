@@ -374,18 +374,7 @@ func (s *Service) deliver(ctx context.Context, l db.PushLog) bool {
 	if ch.Kind == "ntfy" && b.api == nil {
 		actions = s.replyActions(msg, peer, b)
 	}
-	server := s.serverFor(ch)
-	send := func(ctx context.Context) error {
-		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		defer cancel()
-		switch ch.Kind {
-		case "bark":
-			return bark.NewWithServers(ch.Target, server).Send(ctx, title, fitBytes(body, pushBodyBytes))
-		case "ntfy":
-			return s.ntfyOrAnon().publish(ctx, server, ch.Target, title, fitBytes(body, pushBodyBytes), actions, extra)
-		}
-		return fmt.Errorf("未知渠道类型 %s", ch.Kind)
-	}
+	send := func(ctx context.Context) error { return s.sendTo(ctx, ch, title, body, actions, extra) }
 	err := send(ctx)
 
 	now := time.Now()
@@ -428,6 +417,20 @@ func (s *Service) deliver(ctx context.Context, l db.PushLog) bool {
 		return false
 	}
 	return true
+}
+
+// sendTo 往一个渠道发一次，单次 20 秒超时。actions / extra 只对 ntfy 生效。
+func (s *Service) sendTo(ctx context.Context, ch db.Channel, title, body string, actions []action, extra map[string]any) error {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	server := s.serverFor(ch)
+	switch ch.Kind {
+	case "bark":
+		return bark.NewWithServers(ch.Target, server).Send(ctx, title, fitBytes(body, pushBodyBytes))
+	case "ntfy":
+		return s.ntfyOrAnon().publish(ctx, server, ch.Target, title, fitBytes(body, pushBodyBytes), actions, extra)
+	}
+	return fmt.Errorf("未知渠道类型 %s", ch.Kind)
 }
 
 // setLog 更新推送记录，SQLite 偶发失败重试。

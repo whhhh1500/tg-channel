@@ -119,6 +119,28 @@ func (s *Server) setAccountNotify(c *gin.Context) {
 	s.redirect(c, fmt.Sprintf("/peers?account=%d", acc.ID))
 }
 
+// testStrategy "测一次"：按当前发送策略给账号的渠道发一条测试通知，返回一行结果给页面显示。
+// 每个账号每分钟最多 3 次，防止连点把手机刷屏。
+func (s *Server) testStrategy(c *gin.Context) {
+	acc := s.ownedAccount(c, c.Param("id"))
+	if acc == nil {
+		return
+	}
+	if !s.limit.allow(fmt.Sprintf("notifytest:%d", acc.ID), 3, time.Minute) {
+		c.String(http.StatusOK, "测得太频繁，过一分钟再试")
+		return
+	}
+	n, err := s.push.TestStrategy(c.Request.Context(), *acc, levelName(acc.RepeatFrom))
+	switch {
+	case n == 0 && err != nil:
+		c.String(http.StatusOK, "发送失败："+err.Error())
+	case err != nil:
+		c.String(http.StatusOK, "部分渠道失败："+err.Error())
+	default:
+		c.String(http.StatusOK, "已发出，留意手机")
+	}
+}
+
 // toggleMonitorAll 切换账号的"监听所有人"，回到该账号的通知设置页。
 func (s *Server) toggleMonitorAll(c *gin.Context) {
 	acc := s.ownedAccount(c, c.Param("id"))

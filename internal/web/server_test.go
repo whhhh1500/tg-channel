@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -140,6 +141,25 @@ func TestPages(t *testing.T) {
 	want(post("/accounts/"+itoa(other.ID)+"/notify", url.Values{"priority": {"5"}}) == 404, "不能改别人账号的等级")
 	g.First(&peer, peer.ID)
 	want(peer.Priority == 0, "对话应回到跟随默认")
+
+	// 测一次：还没配渠道时如实提示；别人的账号 404；每分钟最多 3 次
+	testPost := func(id uint) (int, string) {
+		resp, err := c.PostForm(srv.URL+"/tg/accounts/"+itoa(id)+"/notify-test", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	code, body = testPost(acc.ID)
+	want(code == 200 && strings.Contains(body, "发送失败") && strings.Contains(body, "渠道"), "没渠道时测一次应提示: "+body)
+	code, _ = testPost(other.ID)
+	want(code == 404, "不能测别人的账号")
+	testPost(acc.ID)
+	testPost(acc.ID)
+	_, body = testPost(acc.ID)
+	want(strings.Contains(body, "太频繁"), "第 4 次应限速: "+body)
 
 	code, body = get("/accounts/" + itoa(acc.ID))
 	want(code == 200 && strings.Contains(body, "ntfy") && strings.Contains(body, "Bark"), "账号详情页")
