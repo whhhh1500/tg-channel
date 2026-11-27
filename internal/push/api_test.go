@@ -103,7 +103,8 @@ func TestPeerPriority(t *testing.T) {
 	acc := db.TgAccount{UserID: 1}
 	g.Create(&acc)
 	g.Create(&db.TgPeer{AccountID: acc.ID, Kind: "user", PeerID: 7, Title: "Bob", Monitored: true})
-	g.Create(&db.TgPeer{AccountID: acc.ID, Kind: "user", PeerID: 8, Title: "Boss", Monitored: true, Priority: 5})
+	peer8 := db.TgPeer{AccountID: acc.ID, Kind: "user", PeerID: 8, Title: "Boss", Monitored: true, Priority: 5}
+	g.Create(&peer8)
 	g.Create(&db.Channel{AccountID: acc.ID, Kind: "ntfy", Target: "t", Enabled: true})
 	s := New(&config.Config{NtfyURL: srv.URL}, g)
 	send := func(peer int64) any {
@@ -143,10 +144,13 @@ func TestPeerPriority(t *testing.T) {
 	if n := api(5); n != 3 {
 		t.Fatalf("接口紧急消息应发三遍: %d", n)
 	}
-	// 改成"高及以上发 2 遍"：高 2 遍，普通 1 遍，不传等级用账号默认（2 最低→1 遍）
+	// 改成"高发 2 遍"：只有高发 2 遍，紧急、普通都 1 遍，不传等级用账号默认（2 → 1 遍）
 	g.Model(&acc).Updates(map[string]any{"repeat_from": 4, "repeat_n": 2})
 	if n := api(4); n != 2 {
-		t.Fatalf("高及以上应发两遍: %d", n)
+		t.Fatalf("高应发两遍: %d", n)
+	}
+	if n := api(5); n != 1 {
+		t.Fatalf("只对选中的等级连发，紧急不连发: %d", n)
 	}
 	if n := api(3); n != 1 {
 		t.Fatalf("普通只发一遍: %d", n)
@@ -154,18 +158,19 @@ func TestPeerPriority(t *testing.T) {
 	if n := api(0); n != 1 || got["priority"] != float64(2) {
 		t.Fatalf("不传等级用账号默认: %d %v", n, got["priority"])
 	}
-	if p := send(8); p != float64(5) || hits != 2 {
+	g.Model(&peer8).Update("priority", 4)
+	if p := send(8); p != float64(4) || hits != 2 {
 		t.Fatalf("TG 消息也按新设置连发: %d", hits)
 	}
 	// 1 遍 = 不连发
 	g.Model(&acc).Update("repeat_n", 1)
-	if p := send(8); p != float64(5) || hits != 1 {
+	if p := send(8); p != float64(4) || hits != 1 {
 		t.Fatalf("设成 1 遍应不连发: %d", hits)
 	}
 }
 
 func TestRepeatTimes(t *testing.T) {
-	for _, c := range [][4]int{{5, 5, 3, 3}, {4, 5, 3, 1}, {5, 4, 2, 2}, {3, 0, 3, 1}, {5, 5, 1, 1}, {5, 5, 9, maxRepeat}} {
+	for _, c := range [][4]int{{5, 5, 3, 3}, {4, 5, 3, 1}, {5, 4, 2, 1}, {4, 4, 2, 2}, {3, 0, 3, 1}, {5, 5, 1, 1}, {5, 5, 9, maxRepeat}} {
 		if got := repeatTimes(c[0], c[1], c[2]); got != c[3] {
 			t.Errorf("repeatTimes%v = %d", c[:3], got)
 		}

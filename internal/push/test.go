@@ -10,7 +10,7 @@ import (
 	"tgchannel/internal/db"
 )
 
-// TestStrategy 按账号的发送策略发一条测试通知：等级取"连发起始等级"，遍数按连发设置。
+// TestStrategy 按账号的发送策略发一条测试通知：等级取策略里选的等级，遍数按连发设置。
 // 不进队列、不记消息记录。第一遍同步发，返回发成功的渠道数和各渠道错误，好让页面马上提示；
 // 补发的几遍在后台按 urgentGap 间隔发完。level 是等级名，只用于通知正文。
 func (s *Service) TestStrategy(ctx context.Context, acc db.TgAccount, level string) (int, error) {

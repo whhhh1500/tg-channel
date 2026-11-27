@@ -33,9 +33,9 @@ const (
 
 var urgentGap = 3 * time.Second // 连发每遍间隔，太近手机会合并成一次提示；测试里调短
 
-// repeatTimes 按账号的连发设置算一共发几遍：等级达到 from 的发 n 遍，其余 1 遍。
+// repeatTimes 按账号的发送策略算一共发几遍：等级正好是 from 的发 n 遍，其余 1 遍。
 func repeatTimes(prio, from, n int) int {
-	if from >= 1 && prio >= from && n > 1 {
+	if from >= 1 && prio == from && n > 1 {
 		return min(n, maxRepeat)
 	}
 	return 1

@@ -32,26 +32,27 @@ select.lv{margin:0;padding:.2rem 1.8rem .2rem .5rem;font-size:.85rem;width:auto;
   </div>
   {{with .Current}}
   <div class="row">
-    <form method="post" action="{{url "/accounts/"}}{{.ID}}/notify">
+    <form method="post" action="{{url "/accounts/"}}{{.ID}}/notify" onchange="this.querySelector('.sv').disabled=false;document.getElementById('tres').textContent='有改动，点保存后生效'">
       <label>默认通知等级
-        <select name="priority" onchange="this.form.submit()">
+        <select name="priority">
           {{range $.Levels}}<option value="{{.V}}" {{if eq .V $.Current.Priority}}selected{{end}}>{{.L}}</option>{{end}}
         </select>
       </label>
       <label class="sep">发送策略
-        <select name="repeat_from" onchange="this.form.submit()">
-          {{range $.Levels}}<option value="{{.V}}" {{if eq .V $.Current.RepeatFrom}}selected{{end}}>{{.L}}{{if ne .V 5}} 及以上{{end}}</option>{{end}}
+        <select name="repeat_from">
+          {{range $.Levels}}<option value="{{.V}}" {{if eq .V $.Current.RepeatFrom}}selected{{end}}>{{.L}}</option>{{end}}
         </select>
         发
-        <select name="repeat_n" onchange="this.form.submit()">
+        <select name="repeat_n">
           {{range $.Repeats}}<option value="{{.}}" {{if eq . $.Current.RepeatN}}selected{{end}}>{{if eq . 1}}1 遍（不连发）{{else}}{{.}} 遍{{end}}</option>{{end}}
         </select>
       </label>
+      <button class="tb sv" disabled>保存</button>
       <button type="button" class="outline tb" hx-post="{{url "/accounts/"}}{{.ID}}/notify-test" hx-target="#tres" hx-disabled-elt="this">测一次</button>
       <span id="tres"></span>
     </form>
   </div>
-  <small>监听所有人：不看"监控转发"开关全部转发，"永不监听"的仍忽略。对话等级选"跟随默认"时用默认通知等级；高 / 紧急响铃弹出，最低 / 低静默收进通知栏。发送策略：达到所选等级的消息连发几遍，每遍隔 3 秒（ntfy / Bark 都会连发，等级只对 ntfy 生效）；「测一次」按这个策略给自己发一条测试通知。</small>
+  <small>监听所有人：不看"监控转发"开关全部转发，"永不监听"的仍忽略。对话等级选"跟随默认"时用默认通知等级；高 / 紧急响铃弹出，最低 / 低静默收进通知栏。发送策略：只有所选等级的消息连发几遍，每遍隔 3 秒（ntfy / Bark 都会连发，等级只对 ntfy 生效）。改完点「保存」才生效；「测一次」按下拉框里当前选的策略给自己发一条测试通知，不用先保存。</small>
   {{end}}
 </article>
 {{if .Peers}}

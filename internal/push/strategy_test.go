@@ -41,7 +41,7 @@ func TestTestStrategy(t *testing.T) {
 	acc := db.TgAccount{UserID: 1}
 	g.Create(&acc)
 	s := New(&config.Config{NtfyURL: srv.URL}, g)
-	g.First(&acc, acc.ID) // 取库里的默认值：紧急及以上发 3 遍
+	g.First(&acc, acc.ID) // 取库里的默认值：紧急发 3 遍
 
 	if _, err := s.TestStrategy(context.Background(), acc, "紧急"); !errors.Is(err, ErrNoChannel) {
 		t.Fatalf("没有渠道应报 ErrNoChannel: %v", err)
